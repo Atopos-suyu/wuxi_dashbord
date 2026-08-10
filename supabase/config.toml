@@ -1,0 +1,5 @@
+# Minimal Supabase config marker for CLI projects.
+# Run migrations with: supabase db push
+
+[project]
+id = "wuxi-workbench"
