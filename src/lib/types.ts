@@ -72,6 +72,10 @@ export interface UserStageLog {
   record_url: string | null;
   owner_id: string;
   created_at: string;
+  qa_status?: import("./constants").QaStatus | null;
+  qa_note?: string | null;
+  qa_by?: string | null;
+  qa_at?: string | null;
   owner?: Profile | null;
   user?: Pick<CampusUser, "id" | "name" | "contact"> | null;
 }

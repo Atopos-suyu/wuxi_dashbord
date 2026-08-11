@@ -9,6 +9,8 @@ import {
   listRecordings as demoListRecordings,
   listResolutions as demoListResolutions,
   listStageLogs as demoListStageLogs,
+  listQaQueue as demoListQaQueue,
+  reviewStageLog as demoReviewStageLog,
   listUsersFor as demoListUsersFor,
   loadDemoDB,
   resolveAlert as demoResolveAlert,
@@ -87,6 +89,23 @@ export async function addStageLog(
 ): Promise<UserStageLog> {
   if (isDemoMode()) return demoAddStageLog(input);
   return sb.sbAddStageLog(input);
+}
+
+export async function listQaQueue(profile: Profile): Promise<UserStageLog[]> {
+  if (isDemoMode()) return demoListQaQueue(profile);
+  return sb.sbListQaQueue(profile);
+}
+
+export async function reviewStageLog(
+  id: string,
+  input: {
+    qa_status: "passed" | "rejected";
+    qa_note?: string;
+    qa_by: string;
+  },
+): Promise<UserStageLog | null> {
+  if (isDemoMode()) return demoReviewStageLog(id, input);
+  return sb.sbReviewStageLog(id, input);
 }
 
 export async function listRecordings(profile: Profile): Promise<UserStageLog[]> {
