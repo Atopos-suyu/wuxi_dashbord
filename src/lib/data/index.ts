@@ -14,6 +14,12 @@ import {
   resolveAlert as demoResolveAlert,
   completeUserTodo as demoCompleteUserTodo,
   copyGoalsFromPeriod as demoCopyGoals,
+  listNotifications as demoListNotifications,
+  upsertNotifications as demoUpsertNotifications,
+  markNotificationRead as demoMarkNotificationRead,
+  markAllNotificationsRead as demoMarkAllNotificationsRead,
+  listActivities as demoListActivities,
+  addStudentActivity as demoAddStudentActivity,
   updateProfile as demoUpdateProfile,
   upsertCapability as demoUpsertCapability,
   upsertDaily as demoUpsertDaily,
@@ -21,14 +27,18 @@ import {
   upsertUser as demoUpsertUser,
   upsertWeekly as demoUpsertWeekly,
 } from "@/lib/demo/store";
+import { computeAlerts } from "@/lib/alerts";
+import { buildNotificationsFromAlerts } from "@/lib/notifications";
 import { canSeeRegionDashboard } from "@/lib/permissions";
 import type {
   AlertResolution,
+  AppNotification,
   CampusUser,
   DailyReview,
   Goal,
   ParentAttitudeLog,
   Profile,
+  StudentActivity,
   TeamCapability,
   UserStageLog,
   WeeklyReview,
@@ -209,7 +219,46 @@ export async function copyGoalsFromPeriod(
   return sb.sbCopyGoalsFromPeriod(fromPeriod, toPeriod);
 }
 
-/** 聚合快照：看板/成员页用 */
+export async function listNotifications(
+  recipientId: string,
+): Promise<AppNotification[]> {
+  if (isDemoMode()) return demoListNotifications(recipientId);
+  return sb.sbListNotifications(recipientId);
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  if (isDemoMode()) {
+    demoMarkNotificationRead(id);
+    return;
+  }
+  await sb.sbMarkNotificationRead(id);
+}
+
+export async function markAllNotificationsRead(
+  recipientId: string,
+): Promise<void> {
+  if (isDemoMode()) {
+    demoMarkAllNotificationsRead(recipientId);
+    return;
+  }
+  await sb.sbMarkAllNotificationsRead(recipientId);
+}
+
+export async function listActivities(
+  userId?: string,
+): Promise<StudentActivity[]> {
+  if (isDemoMode()) return demoListActivities(userId);
+  return sb.sbListActivities(userId);
+}
+
+export async function addStudentActivity(
+  input: Omit<StudentActivity, "id" | "created_at">,
+): Promise<StudentActivity> {
+  if (isDemoMode()) return demoAddStudentActivity(input);
+  return sb.sbAddStudentActivity(input);
+}
+
+/** 聚合快照：看板/成员页用；并同步站内通知 */
 export async function loadWorkbenchSnapshot(profile: Profile) {
   const leader = canSeeRegionDashboard(profile.role) || profile.role === "T1";
   const [
@@ -221,6 +270,8 @@ export async function loadWorkbenchSnapshot(profile: Profile) {
     goals,
     resolutions,
     attitudeLogs,
+    activities,
+    existingNotifications,
   ] = await Promise.all([
     listProfiles(),
     listUsersFor(profile),
@@ -230,7 +281,50 @@ export async function loadWorkbenchSnapshot(profile: Profile) {
     listGoals(),
     listResolutions(),
     listAttitudeLogs(),
+    listActivities(),
+    listNotifications(profile.id),
   ]);
+
+  const period = currentWeekPeriod();
+  const alerts = computeAlerts({
+    members: profiles,
+    users,
+    dailyReviews,
+    capabilities,
+    resolutions,
+    attitudeLogs,
+    goals,
+    period,
+  });
+
+  if (canSeeRegionDashboard(profile.role)) {
+    const built = buildNotificationsFromAlerts({
+      recipients: [profile],
+      alerts,
+      existing: existingNotifications,
+    });
+    const fresh = built.filter(
+      (n) =>
+        !existingNotifications.some(
+          (e) => e.source_key === n.source_key && e.recipient_id === n.recipient_id,
+        ),
+    );
+    if (fresh.length) {
+      if (isDemoMode()) {
+        demoUpsertNotifications(fresh);
+      } else {
+        await sb.sbUpsertNotifications(
+          fresh.map((n) => ({
+            ...n,
+            id: undefined as unknown as string,
+          })),
+        );
+      }
+    }
+  }
+
+  const notifications = await listNotifications(profile.id);
+
   return {
     profiles,
     users,
@@ -240,6 +334,9 @@ export async function loadWorkbenchSnapshot(profile: Profile) {
     goals,
     resolutions,
     attitudeLogs,
-    period: currentWeekPeriod(),
+    activities,
+    notifications,
+    alerts,
+    period,
   };
 }

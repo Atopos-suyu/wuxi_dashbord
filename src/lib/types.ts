@@ -56,6 +56,7 @@ export interface CampusUser {
   remark: string;
   area?: string | null;
   last_stage_update_at?: string | null;
+  last_active_at?: string | null;
   created_at: string;
   updated_at: string;
   owner?: Profile | null;
@@ -140,6 +141,28 @@ export interface ParentAttitudeLog {
   from_attitude: string | null;
   to_attitude: string;
   changed_by: string | null;
+  created_at: string;
+}
+
+export interface AppNotification {
+  id: string;
+  recipient_id: string;
+  title: string;
+  body: string;
+  link: string | null;
+  level: "red" | "yellow" | "info";
+  source_key: string;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface StudentActivity {
+  id: string;
+  user_id: string;
+  activity_type: import("./constants").ActivityType | string;
+  note: string;
+  happened_at: string;
+  recorded_by: string;
   created_at: string;
 }
 

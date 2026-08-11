@@ -6,6 +6,9 @@ import {
   AudioLines,
   Bell,
   ClipboardList,
+  FileSpreadsheet,
+  GraduationCap,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Network,
@@ -15,7 +18,8 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { APP_SHORT_NAME, ROLE_LABEL } from "@/lib/constants";
-import { computeAlerts, countOpenAlerts } from "@/lib/alerts";
+import { countOpenAlerts } from "@/lib/alerts";
+import { unreadCount } from "@/lib/notifications";
 import { loadWorkbenchSnapshot } from "@/lib/data";
 import { useLiveQuery } from "@/lib/data/use-live-query";
 import { useSession } from "@/components/providers/session-provider";
@@ -25,7 +29,10 @@ import { Button } from "@/components/ui/button";
 const NAV = [
   { href: "/overview", label: "总览", icon: LayoutDashboard, need: "region" as const },
   { href: "/alerts", label: "预警", icon: Bell, need: "region" as const },
+  { href: "/notifications", label: "通知", icon: Inbox, need: "region" as const },
   { href: "/goals", label: "目标", icon: Target, need: "region" as const },
+  { href: "/briefing", label: "会包", icon: FileSpreadsheet, need: "region" as const },
+  { href: "/students", label: "学员", icon: GraduationCap, need: "members" as const },
   { href: "/org", label: "组织", icon: Network, need: "org" as const },
   { href: "/users", label: "用户", icon: Users, need: "all" as const },
   { href: "/members", label: "成员", icon: UserRound, need: "members" as const },
@@ -47,24 +54,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   } = useSession();
 
   const { data: snap } = useLiveQuery(
-    async () => (profile && canSeeRegion ? loadWorkbenchSnapshot(profile) : null),
-    [profile?.id, canSeeRegion],
+    async () =>
+      profile && (canSeeRegion || canSeeMembers)
+        ? loadWorkbenchSnapshot(profile)
+        : null,
+    [profile?.id, canSeeRegion, canSeeMembers],
   );
 
-  const openAlerts = snap
-    ? countOpenAlerts(
-        computeAlerts({
-          members: snap.profiles,
-          users: snap.users,
-          dailyReviews: snap.dailyReviews,
-          capabilities: snap.capabilities,
-          resolutions: snap.resolutions,
-          attitudeLogs: snap.attitudeLogs,
-          goals: snap.goals,
-          period: snap.period,
-        }),
-      )
-    : 0;
+  const openAlerts = snap?.alerts ? countOpenAlerts(snap.alerts) : 0;
+  const unreadNotifs =
+    profile && snap?.notifications
+      ? unreadCount(snap.notifications, profile.id)
+      : 0;
 
   const items = NAV.filter((n) => {
     if (n.need === "region") return canSeeRegion;
@@ -99,17 +100,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="退出"
-            onClick={async () => {
-              await logout();
-              router.replace("/login");
-            }}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {canSeeRegion ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="通知"
+                className="relative"
+                onClick={() => router.push("/notifications")}
+              >
+                <Inbox className="h-4 w-4" />
+                {unreadNotifs > 0 ? (
+                  <span className="absolute right-1 top-1 min-w-4 rounded-full bg-rose-500 px-1 text-center text-[9px] font-bold text-white">
+                    {unreadNotifs > 9 ? "9+" : unreadNotifs}
+                  </span>
+                ) : null}
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="退出"
+              onClick={async () => {
+                await logout();
+                router.replace("/login");
+              }}
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -119,7 +138,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {items.map((item) => {
               const active = pathname.startsWith(item.href);
               const Icon = item.icon;
-              const showBadge = item.href === "/alerts" && openAlerts > 0;
+              const badge =
+                item.href === "/alerts"
+                  ? openAlerts
+                  : item.href === "/notifications"
+                    ? unreadNotifs
+                    : 0;
               return (
                 <Link
                   key={item.href}
@@ -133,7 +157,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Icon className="h-4 w-4" />
                   <span className="flex-1">{item.label}</span>
-                  {showBadge ? (
+                  {badge > 0 ? (
                     <span
                       className={cn(
                         "rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
@@ -142,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           : "bg-rose-100 text-rose-800",
                       )}
                     >
-                      {openAlerts}
+                      {badge}
                     </span>
                   ) : null}
                 </Link>
@@ -159,7 +183,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {items.slice(0, 4).map((item) => {
             const active = pathname.startsWith(item.href);
             const Icon = item.icon;
-            const showBadge = item.href === "/alerts" && openAlerts > 0;
+            const badge =
+              item.href === "/alerts"
+                ? openAlerts
+                : item.href === "/notifications"
+                  ? unreadNotifs
+                  : 0;
             return (
               <Link
                 key={item.href}
@@ -171,9 +200,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="h-5 w-5" />
                 {item.label}
-                {showBadge ? (
+                {badge > 0 ? (
                   <span className="absolute right-2 top-1 min-w-4 rounded-full bg-rose-500 px-1 text-center text-[9px] font-bold text-white">
-                    {openAlerts > 9 ? "9+" : openAlerts}
+                    {badge > 9 ? "9+" : badge}
                   </span>
                 ) : null}
               </Link>
@@ -194,9 +223,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   {item.label}
-                  {item.href === "/alerts" && openAlerts > 0
-                    ? ` (${openAlerts})`
-                    : ""}
                 </Link>
               );
             })}

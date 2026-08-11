@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  DEMO_ACTIVITIES,
   DEMO_CAPABILITIES,
   DEMO_DAILY,
   DEMO_GOALS,
@@ -14,18 +15,20 @@ import { calcLevel, normalizeSixDim } from "@/lib/level";
 import { visibleMemberIds } from "@/lib/permissions";
 import type {
   AlertResolution,
+  AppNotification,
   CampusUser,
   DailyReview,
   Goal,
   ParentAttitudeLog,
   Profile,
+  StudentActivity,
   TeamCapability,
   UserStageLog,
   WeeklyReview,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
-const STORAGE_KEY = "wxu_demo_db_v2_1";
+const STORAGE_KEY = "wxu_demo_db_v2_2";
 
 export interface DemoDB {
   profiles: Profile[];
@@ -37,6 +40,8 @@ export interface DemoDB {
   goals: Goal[];
   resolutions: AlertResolution[];
   attitudeLogs: ParentAttitudeLog[];
+  notifications: AppNotification[];
+  activities: StudentActivity[];
 }
 
 function seed(): DemoDB {
@@ -59,6 +64,8 @@ function seed(): DemoDB {
         created_at: "2026-08-08T10:00:00.000Z",
       },
     ],
+    notifications: [],
+    activities: structuredClone(DEMO_ACTIVITIES),
   };
 }
 
@@ -75,6 +82,8 @@ export function loadDemoDB(): DemoDB {
     if (!parsed.goals) parsed.goals = structuredClone(DEMO_GOALS);
     if (!parsed.resolutions) parsed.resolutions = [];
     if (!parsed.attitudeLogs) parsed.attitudeLogs = seed().attitudeLogs;
+    if (!parsed.notifications) parsed.notifications = [];
+    if (!parsed.activities) parsed.activities = structuredClone(DEMO_ACTIVITIES);
     return parsed;
   } catch {
     return seed();
@@ -191,6 +200,7 @@ export function upsertUser(
       created_at: now,
       updated_at: now,
       last_stage_update_at: now,
+      last_active_at: null,
     });
   }
   saveDemoDB(db);
@@ -308,17 +318,12 @@ export function upsertCapability(
   );
   if (existing) {
     db.capabilities = db.capabilities.map((c) =>
-      c.id === existing.id
-        ? { ...c, scores: input.scores, review_note: input.review_note }
-        : c,
+      c.id === existing.id ? { ...c, ...input, id: existing.id } : c,
     );
   } else {
     db.capabilities.push({
+      ...input,
       id: uid("cap"),
-      member_id: input.member_id,
-      period: input.period,
-      scores: input.scores,
-      review_note: input.review_note,
       created_at: new Date().toISOString(),
     });
   }
@@ -330,8 +335,7 @@ export function upsertDaily(
 ) {
   const db = loadDemoDB();
   const existing = db.dailyReviews.find(
-    (d) =>
-      d.member_id === input.member_id && d.review_date === input.review_date,
+    (d) => d.member_id === input.member_id && d.review_date === input.review_date,
   );
   if (existing) {
     db.dailyReviews = db.dailyReviews.map((d) =>
@@ -398,9 +402,7 @@ export function createDemoProfile(input: {
 
 export function listGoals(period?: string) {
   const db = loadDemoDB();
-  return period
-    ? db.goals.filter((g) => g.period === period)
-    : db.goals;
+  return period ? db.goals.filter((g) => g.period === period) : db.goals;
 }
 
 export function upsertGoal(
@@ -443,4 +445,78 @@ export function resolveAlert(
     created_at: new Date().toISOString(),
   });
   saveDemoDB(db);
+}
+
+export function listNotifications(recipientId: string) {
+  return loadDemoDB()
+    .notifications.filter((n) => n.recipient_id === recipientId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export function upsertNotifications(rows: AppNotification[]) {
+  const db = loadDemoDB();
+  const map = new Map(
+    db.notifications.map((n) => [`${n.recipient_id}:${n.source_key}`, n]),
+  );
+  for (const row of rows) {
+    const key = `${row.recipient_id}:${row.source_key}`;
+    const prev = map.get(key);
+    if (prev) {
+      map.set(key, { ...prev, ...row, id: prev.id, read_at: prev.read_at });
+    } else {
+      map.set(key, row);
+    }
+  }
+  db.notifications = Array.from(map.values());
+  saveDemoDB(db);
+}
+
+export function markNotificationRead(id: string) {
+  const db = loadDemoDB();
+  db.notifications = db.notifications.map((n) =>
+    n.id === id ? { ...n, read_at: new Date().toISOString() } : n,
+  );
+  saveDemoDB(db);
+}
+
+export function markAllNotificationsRead(recipientId: string) {
+  const db = loadDemoDB();
+  const now = new Date().toISOString();
+  db.notifications = db.notifications.map((n) =>
+    n.recipient_id === recipientId && !n.read_at
+      ? { ...n, read_at: now }
+      : n,
+  );
+  saveDemoDB(db);
+}
+
+export function listActivities(userId?: string) {
+  const db = loadDemoDB();
+  const rows = userId
+    ? db.activities.filter((a) => a.user_id === userId)
+    : db.activities;
+  return [...rows].sort((a, b) => b.happened_at.localeCompare(a.happened_at));
+}
+
+export function addStudentActivity(
+  input: Omit<StudentActivity, "id" | "created_at">,
+) {
+  const db = loadDemoDB();
+  const row: StudentActivity = {
+    ...input,
+    id: uid("sa"),
+    created_at: new Date().toISOString(),
+  };
+  db.activities.unshift(row);
+  db.users = db.users.map((u) =>
+    u.id === input.user_id
+      ? {
+          ...u,
+          last_active_at: input.happened_at,
+          updated_at: new Date().toISOString(),
+        }
+      : u,
+  );
+  saveDemoDB(db);
+  return row;
 }

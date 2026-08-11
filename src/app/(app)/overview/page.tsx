@@ -65,6 +65,7 @@ export default function OverviewPage() {
 
   const alerts = useMemo(() => {
     if (!data) return [];
+    if (data.alerts) return data.alerts;
     return computeAlerts({
       members: data.profiles,
       users: data.users,
@@ -194,6 +195,9 @@ export default function OverviewPage() {
           <h2 className="font-semibold">成员红绿灯</h2>
           <Link href="/alerts" className="text-sm text-[var(--lake)]">
             预警中心 →
+          </Link>
+          <Link href="/briefing" className="text-sm text-[var(--lake)]">
+            作战会包 →
           </Link>
         </div>
         <div className="divide-y divide-[var(--line)]/70">
