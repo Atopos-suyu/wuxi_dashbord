@@ -42,6 +42,7 @@ function mapUser(row: Record<string, unknown>): CampusUser {
     last_stage_update_at: (row.last_stage_update_at as string | null) ?? null,
     last_active_at: (row.last_active_at as string | null) ?? null,
     school_region: (row.school_region as string | null) ?? null,
+    loss_reason: (row.loss_reason as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     owner: owner ?? null,
@@ -98,6 +99,7 @@ export async function sbUpsertUser(
     "remark",
     "area",
     "school_region",
+    "loss_reason",
   ];
   for (const key of fields) {
     if (input[key] !== undefined) payload[key] = input[key];

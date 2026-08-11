@@ -52,6 +52,8 @@ supabase/migrations/20260811000003_v2_roles_goals_alerts.sql
 | 周作战会包 | `/briefing`：红绿灯+预警+目标+学员 CSV 一键导出 |
 | 漏斗诊断 | `/funnel`：阶段转化率、双校区/片区对比 |
 | 双校区 | 无锡学院 / 无锡太湖学院；总览与组织可筛选/调整 |
+| 录音质检 | 职规/关单强制录音；`/qa` 抽听合格/需复盘 |
+| 企微推送 | `/settings` 一键推送红灯（`WECOM_BOT_WEBHOOK_URL`） |
 | 成员下钻 | 用户列表、能力对比、近 7 天日报、告警 |
 | 用户管理 | 六维、阶段、待办完成、联系方式复制、态度变更日志 |
 | 复盘 / 录音库 | 日报周报与录音在线播放 |
@@ -63,6 +65,7 @@ supabase/migrations/20260811000003_v2_roles_goals_alerts.sql
 - V2.1：`20260811000004_v2_1_ops.sql`（`parent_attitude_logs`）
 - V2.2：`20260811000005_notify_students.sql`（通知 / 学员活跃 / 预警视图）
 - V2.3：`20260811000006_campus_funnel.sql`（双校区约束 + can_see_member 同校区）
+- V2.4：`20260811000007_qa_wecom.sql`（录音质检字段 + 企微推送去重）
 - 或一键执行 `supabase/setup_all.sql`
 
 ## 脚本

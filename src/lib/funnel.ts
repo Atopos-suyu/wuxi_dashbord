@@ -46,10 +46,20 @@ export function funnelConversion(users: CampusUser[]) {
       rate: fromCount > 0 ? Math.round((toCount / fromCount) * 1000) / 10 : null,
     });
   }
-  const lost = users.filter((u) => u.stage === "流失").length;
+  const lostUsers = users.filter((u) => u.stage === "流失");
+  const lost = lostUsers.length;
+  const lossByReason = new Map<string, number>();
+  for (const u of lostUsers) {
+    const key = u.loss_reason || "未标注";
+    lossByReason.set(key, (lossByReason.get(key) ?? 0) + 1);
+  }
   return {
     rows,
     lost,
+    lostUsers,
+    lossByReason: Array.from(lossByReason.entries())
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count),
     total: users.length,
     dealRate:
       users.length > 0

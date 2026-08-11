@@ -29,7 +29,7 @@ import type {
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
-const STORAGE_KEY = "wxu_demo_db_v2_4";
+const STORAGE_KEY = "wxu_demo_db_v2_5";
 
 export interface DemoDB {
   profiles: Profile[];
@@ -204,6 +204,7 @@ export function upsertUser(
       updated_at: now,
       last_stage_update_at: now,
       last_active_at: null,
+      loss_reason: input.loss_reason ?? null,
     });
   }
   saveDemoDB(db);
