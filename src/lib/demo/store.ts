@@ -17,6 +17,7 @@ import type {
   CampusUser,
   DailyReview,
   Goal,
+  ParentAttitudeLog,
   Profile,
   TeamCapability,
   UserStageLog,
@@ -24,7 +25,7 @@ import type {
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
-const STORAGE_KEY = "wxu_demo_db_v2";
+const STORAGE_KEY = "wxu_demo_db_v2_1";
 
 export interface DemoDB {
   profiles: Profile[];
@@ -35,6 +36,7 @@ export interface DemoDB {
   weeklyReviews: WeeklyReview[];
   goals: Goal[];
   resolutions: AlertResolution[];
+  attitudeLogs: ParentAttitudeLog[];
 }
 
 function seed(): DemoDB {
@@ -47,6 +49,16 @@ function seed(): DemoDB {
     weeklyReviews: structuredClone(DEMO_WEEKLY),
     goals: structuredClone(DEMO_GOALS),
     resolutions: structuredClone(DEMO_RESOLUTIONS),
+    attitudeLogs: [
+      {
+        id: "pal1",
+        user_id: "u1",
+        from_attitude: "支持",
+        to_attitude: "犹豫",
+        changed_by: "demo-t0-cs1",
+        created_at: "2026-08-08T10:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -62,6 +74,7 @@ export function loadDemoDB(): DemoDB {
     const parsed = JSON.parse(raw) as DemoDB;
     if (!parsed.goals) parsed.goals = structuredClone(DEMO_GOALS);
     if (!parsed.resolutions) parsed.resolutions = [];
+    if (!parsed.attitudeLogs) parsed.attitudeLogs = seed().attitudeLogs;
     return parsed;
   } catch {
     return seed();
@@ -121,6 +134,7 @@ export function getUser(id: string) {
 
 export function upsertUser(
   input: Partial<CampusUser> & Pick<CampusUser, "name" | "owner_id">,
+  opts?: { changedBy?: string | null },
 ) {
   const db = loadDemoDB();
   const now = new Date().toISOString();
@@ -130,6 +144,19 @@ export function upsertUser(
       if (u.id !== input.id) return u;
       const six = normalizeSixDim(input.six_dim_score ?? u.six_dim_score);
       const stageChanged = input.stage && input.stage !== u.stage;
+      if (
+        input.parent_attitude !== undefined &&
+        input.parent_attitude !== u.parent_attitude
+      ) {
+        db.attitudeLogs.unshift({
+          id: uid("pal"),
+          user_id: u.id,
+          from_attitude: u.parent_attitude,
+          to_attitude: String(input.parent_attitude),
+          changed_by: opts?.changedBy ?? null,
+          created_at: now,
+        });
+      }
       return {
         ...u,
         ...input,
@@ -168,6 +195,56 @@ export function upsertUser(
   }
   saveDemoDB(db);
   return getUser(input.id ?? db.users[0].id);
+}
+
+export function completeUserTodo(userId: string) {
+  const db = loadDemoDB();
+  db.users = db.users.map((u) =>
+    u.id === userId
+      ? {
+          ...u,
+          next_action: "",
+          next_action_due: null,
+          updated_at: new Date().toISOString(),
+        }
+      : u,
+  );
+  saveDemoDB(db);
+  return getUser(userId);
+}
+
+export function listAttitudeLogs(userId?: string) {
+  const db = loadDemoDB();
+  const rows = userId
+    ? db.attitudeLogs.filter((l) => l.user_id === userId)
+    : db.attitudeLogs;
+  return [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export function copyGoalsFromPeriod(fromPeriod: string, toPeriod: string) {
+  const db = loadDemoDB();
+  const source = db.goals.filter((g) => g.period === fromPeriod);
+  let copied = 0;
+  for (const g of source) {
+    const exists = db.goals.some(
+      (x) =>
+        x.period === toPeriod &&
+        x.metric === g.metric &&
+        (x.member_id ?? null) === (g.member_id ?? null),
+    );
+    if (exists) continue;
+    db.goals.push({
+      id: uid("goal"),
+      member_id: g.member_id,
+      period: toPeriod,
+      metric: g.metric,
+      target_value: g.target_value,
+      created_at: new Date().toISOString(),
+    });
+    copied += 1;
+  }
+  saveDemoDB(db);
+  return copied;
 }
 
 export function addStageLog(

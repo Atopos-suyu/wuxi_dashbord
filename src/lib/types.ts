@@ -134,6 +134,15 @@ export interface AlertResolution {
   created_at: string;
 }
 
+export interface ParentAttitudeLog {
+  id: string;
+  user_id: string;
+  from_attitude: string | null;
+  to_attitude: string;
+  changed_by: string | null;
+  created_at: string;
+}
+
 export interface ComputedAlert {
   alert_key: string;
   alert_type: AlertType;

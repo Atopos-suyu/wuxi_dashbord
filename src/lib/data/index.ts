@@ -5,12 +5,15 @@ import {
   addStageLog as demoAddStageLog,
   getUser as demoGetUser,
   listGoals as demoListGoals,
+  listAttitudeLogs as demoListAttitudeLogs,
   listRecordings as demoListRecordings,
   listResolutions as demoListResolutions,
   listStageLogs as demoListStageLogs,
   listUsersFor as demoListUsersFor,
   loadDemoDB,
   resolveAlert as demoResolveAlert,
+  completeUserTodo as demoCompleteUserTodo,
+  copyGoalsFromPeriod as demoCopyGoals,
   updateProfile as demoUpdateProfile,
   upsertCapability as demoUpsertCapability,
   upsertDaily as demoUpsertDaily,
@@ -24,12 +27,14 @@ import type {
   CampusUser,
   DailyReview,
   Goal,
+  ParentAttitudeLog,
   Profile,
   TeamCapability,
   UserStageLog,
   WeeklyReview,
 } from "@/lib/types";
 import * as sb from "@/lib/data/supabase-repo";
+import { currentWeekPeriod } from "@/lib/utils";
 
 export async function listProfiles(): Promise<Profile[]> {
   if (isDemoMode()) return loadDemoDB().profiles;
@@ -48,9 +53,15 @@ export async function getUser(id: string): Promise<CampusUser | null> {
 
 export async function upsertUser(
   input: Partial<CampusUser> & Pick<CampusUser, "name" | "owner_id">,
+  opts?: { changedBy?: string | null },
 ): Promise<CampusUser | null> {
-  if (isDemoMode()) return demoUpsertUser(input);
-  return sb.sbUpsertUser(input);
+  if (isDemoMode()) return demoUpsertUser(input, opts);
+  return sb.sbUpsertUser(input, opts);
+}
+
+export async function completeUserTodo(userId: string): Promise<CampusUser | null> {
+  if (isDemoMode()) return demoCompleteUserTodo(userId);
+  return sb.sbCompleteUserTodo(userId);
 }
 
 export async function listStageLogs(
@@ -183,19 +194,43 @@ export async function resolveAlert(
   await sb.sbResolveAlert(input);
 }
 
+export async function listAttitudeLogs(
+  userId?: string,
+): Promise<ParentAttitudeLog[]> {
+  if (isDemoMode()) return demoListAttitudeLogs(userId);
+  return sb.sbListAttitudeLogs(userId);
+}
+
+export async function copyGoalsFromPeriod(
+  fromPeriod: string,
+  toPeriod: string,
+): Promise<number> {
+  if (isDemoMode()) return demoCopyGoals(fromPeriod, toPeriod);
+  return sb.sbCopyGoalsFromPeriod(fromPeriod, toPeriod);
+}
+
 /** 聚合快照：看板/成员页用 */
 export async function loadWorkbenchSnapshot(profile: Profile) {
   const leader = canSeeRegionDashboard(profile.role) || profile.role === "T1";
-  const [profiles, users, capabilities, dailyReviews, weeklyReviews, goals, resolutions] =
-    await Promise.all([
-      listProfiles(),
-      listUsersFor(profile),
-      listCapabilities(),
-      listDailyReviews(leader ? undefined : { memberId: profile.id }),
-      listWeeklyReviews(leader ? undefined : profile.id),
-      listGoals(),
-      listResolutions(),
-    ]);
+  const [
+    profiles,
+    users,
+    capabilities,
+    dailyReviews,
+    weeklyReviews,
+    goals,
+    resolutions,
+    attitudeLogs,
+  ] = await Promise.all([
+    listProfiles(),
+    listUsersFor(profile),
+    listCapabilities(),
+    listDailyReviews(leader ? undefined : { memberId: profile.id }),
+    listWeeklyReviews(leader ? undefined : profile.id),
+    listGoals(),
+    listResolutions(),
+    listAttitudeLogs(),
+  ]);
   return {
     profiles,
     users,
@@ -204,5 +239,7 @@ export async function loadWorkbenchSnapshot(profile: Profile) {
     weeklyReviews,
     goals,
     resolutions,
+    attitudeLogs,
+    period: currentWeekPeriod(),
   };
 }

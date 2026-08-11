@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty";
 import { LoadingBlock } from "@/components/ui/loading";
+import { downloadCsv } from "@/lib/utils";
 
 export default function AlertsPage() {
   const { profile, canSeeRegion, loading: sessionLoading } = useSession();
@@ -42,6 +43,9 @@ export default function AlertsPage() {
       dailyReviews: data.dailyReviews,
       capabilities: data.capabilities,
       resolutions: data.resolutions,
+      attitudeLogs: data.attitudeLogs,
+      goals: data.goals,
+      period: data.period,
     });
     return all.filter((a) => {
       if (a.resolved) return false;
@@ -59,12 +63,33 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="section-title text-2xl md:text-3xl">预警中心</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          未处理 <span className="font-semibold text-[var(--accent)]">{alerts.length}</span>{" "}
-          条 · 去跟进 → 标记处理形成闭环
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="section-title text-2xl md:text-3xl">预警中心</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            未处理 <span className="font-semibold text-[var(--accent)]">{alerts.length}</span>{" "}
+            条 · 去跟进 → 标记处理形成闭环
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            downloadCsv("alerts.csv", [
+              ["级别", "类型", "成员", "用户", "联系方式", "原因"],
+              ...alerts.map((a) => [
+                a.level,
+                a.alert_type,
+                a.member_name,
+                a.user_name ?? "",
+                a.contact ?? "",
+                a.reason,
+              ]),
+            ]);
+          }}
+        >
+          导出 CSV
+        </Button>
       </div>
 
       <div className="panel grid grid-cols-1 gap-2 p-3 md:grid-cols-3">

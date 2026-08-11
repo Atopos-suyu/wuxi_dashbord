@@ -20,6 +20,8 @@ import { useSession } from "@/components/providers/session-provider";
 import {
   listCapabilities,
   listDailyReviews,
+  listGoals,
+  listAttitudeLogs,
   listProfiles,
   listUsersFor,
   listResolutions,
@@ -60,6 +62,8 @@ export default function MemberDetailPage() {
   );
   const { data: daily = [] } = useLiveQuery(() => listDailyReviews(), []);
   const { data: resolutions = [] } = useLiveQuery(() => listResolutions(), []);
+  const { data: attitudeLogs = [] } = useLiveQuery(() => listAttitudeLogs(), []);
+  const { data: goals = [] } = useLiveQuery(() => listGoals(), []);
 
   const member = profiles.find((p) => p.id === params.id);
   const mine = users.filter((u) => u.owner_id === params.id);
@@ -91,8 +95,11 @@ export default function MemberDetailPage() {
       dailyReviews: daily,
       capabilities: caps,
       resolutions,
+      attitudeLogs,
+      goals,
+      period: week,
     }).filter((a) => a.member_id === member.id && !a.resolved);
-  }, [member, profiles, users, daily, caps, resolutions]);
+  }, [member, profiles, users, daily, caps, resolutions, attitudeLogs, goals, week]);
 
   const light = member
     ? memberTrafficLight({

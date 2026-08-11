@@ -1,12 +1,16 @@
 import {
   ALERT_THRESHOLDS,
   CAPABILITY_KEYS,
+  GOAL_METRICS,
   type TrafficLight,
 } from "@/lib/constants";
+import { computeGoalActuals } from "@/lib/metrics";
 import type {
   CampusUser,
   ComputedAlert,
   DailyReview,
+  Goal,
+  ParentAttitudeLog,
   Profile,
   TeamCapability,
   AlertResolution,
@@ -56,17 +60,28 @@ function capabilityDropWeeks(
   return drops;
 }
 
-/** 动态计算预警（不落库），再与已处理记录合并 */
+function worsenedFromSupport(log: ParentAttitudeLog) {
+  return (
+    log.from_attitude === "支持" &&
+    (log.to_attitude === "犹豫" || log.to_attitude === "反对")
+  );
+}
+
+/** 动态计算预警（不落库），再与已处理记录合并。口径集中于此，页面只展示。 */
 export function computeAlerts(input: {
   members: Profile[];
   users: CampusUser[];
   dailyReviews: DailyReview[];
   capabilities: TeamCapability[];
   resolutions: AlertResolution[];
+  attitudeLogs?: ParentAttitudeLog[];
+  goals?: Goal[];
+  period?: string;
 }): ComputedAlert[] {
   const resolved = new Set(input.resolutions.map((r) => r.alert_key));
   const alerts: ComputedAlert[] = [];
   const today = format(new Date(), "yyyy-MM-dd");
+  const attitudeLogs = input.attitudeLogs ?? [];
 
   for (const m of input.members) {
     if (m.role === "T3") continue;
@@ -161,8 +176,7 @@ export function computeAlerts(input: {
       alerts.push({
         alert_key: `待办逾期:${u.id}:${u.next_action_due}`,
         alert_type: "待办逾期",
-        level:
-          overdue > ALERT_THRESHOLDS.overdueRedDays ? "red" : "yellow",
+        level: overdue > ALERT_THRESHOLDS.overdueRedDays ? "red" : "yellow",
         member_id: u.owner_id,
         member_name: memberName,
         user_id: u.id,
@@ -172,19 +186,43 @@ export function computeAlerts(input: {
       });
     }
 
-    if (u.parent_attitude === "犹豫" || u.parent_attitude === "反对") {
-      // 简化：当前态度恶化即预警（历史对比需日志，演示用现态）
-      if (u.level === "S" || u.level === "A") {
+    const badLog = attitudeLogs.find(
+      (l) => l.user_id === u.id && worsenedFromSupport(l),
+    );
+    if (badLog) {
+      alerts.push({
+        alert_key: `家长态度恶化:${u.id}:${badLog.to_attitude}`,
+        alert_type: "家长态度恶化",
+        level: "red",
+        member_id: u.owner_id,
+        member_name: memberName,
+        user_id: u.id,
+        user_name: u.name,
+        contact: u.contact,
+        reason: `家长态度由「${badLog.from_attitude}」变为「${badLog.to_attitude}」`,
+      });
+    }
+  }
+
+  if (input.goals?.length && input.period) {
+    const teamGoals = input.goals.filter(
+      (g) => g.period === input.period && g.member_id == null,
+    );
+    const actuals = computeGoalActuals(input.users, { range: "week" });
+    for (const metric of GOAL_METRICS) {
+      const goal = teamGoals.find((g) => g.metric === metric);
+      if (!goal || goal.target_value <= 0) continue;
+      const actual = actuals[metric];
+      const pct = Math.round((actual / goal.target_value) * 100);
+      if (pct < ALERT_THRESHOLDS.goalLagPct) {
+        const t3 = input.members.find((m) => m.role === "T3");
         alerts.push({
-          alert_key: `家长态度恶化:${u.id}:${u.parent_attitude}`,
-          alert_type: "家长态度恶化",
-          level: "red",
-          member_id: u.owner_id,
-          member_name: memberName,
-          user_id: u.id,
-          user_name: u.name,
-          contact: u.contact,
-          reason: `家长态度为「${u.parent_attitude}」`,
+          alert_key: `目标落后:team:${input.period}:${metric}`,
+          alert_type: "目标落后",
+          level: pct < ALERT_THRESHOLDS.goalLagPct / 2 ? "red" : "yellow",
+          member_id: t3?.id ?? input.members[0]?.id ?? "",
+          member_name: "全队",
+          reason: `${metric} 达成 ${pct}%（${actual}/${goal.target_value}）低于 ${ALERT_THRESHOLDS.goalLagPct}%`,
         });
       }
     }
@@ -220,4 +258,8 @@ export function memberTrafficLight(input: {
     return { light: "yellow", reasons };
   }
   return { light: "green", reasons: ["指标正常"] };
+}
+
+export function countOpenAlerts(alerts: ComputedAlert[]) {
+  return alerts.filter((a) => !a.resolved).length;
 }

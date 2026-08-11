@@ -54,6 +54,9 @@ export default function MembersPage() {
       dailyReviews: data.dailyReviews,
       capabilities: data.capabilities,
       resolutions: data.resolutions,
+      attitudeLogs: data.attitudeLogs,
+      goals: data.goals,
+      period: data.period,
     });
   }, [data]);
 

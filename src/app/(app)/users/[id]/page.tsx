@@ -17,6 +17,7 @@ import { canSeeMember } from "@/lib/permissions";
 import { useSession } from "@/components/providers/session-provider";
 import {
   addStageLog,
+  completeUserTodo,
   getUser,
   listProfiles,
   listStageLogs,
@@ -279,12 +280,15 @@ export default function UserDetailPage() {
             <Select
               defaultValue={user.parent_attitude}
               onChange={async (e) => {
-                await upsertUser({
-                  id: user.id,
-                  name: user.name,
-                  owner_id: user.owner_id,
-                  parent_attitude: e.target.value,
-                });
+                await upsertUser(
+                  {
+                    id: user.id,
+                    name: user.name,
+                    owner_id: user.owner_id,
+                    parent_attitude: e.target.value,
+                  },
+                  { changedBy: profile.id },
+                );
                 reload();
               }}
             >
@@ -340,6 +344,34 @@ export default function UserDetailPage() {
             />
           </Field>
         </div>
+        {(user.next_action || user.next_action_due) && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              await completeUserTodo(user.id);
+              reload();
+              toast.success("待办已完成，逾期预警将清除");
+            }}
+          >
+            标记待办完成
+          </Button>
+        )}
+        {user.contact ? (
+          <p className="text-xs text-[var(--muted)]">
+            联系方式：{user.contact}{" "}
+            <button
+              type="button"
+              className="text-[var(--lake)] underline"
+              onClick={async () => {
+                await navigator.clipboard.writeText(user.contact);
+                toast.success("已复制联系方式");
+              }}
+            >
+              复制
+            </button>
+          </p>
+        ) : null}
         <Field label="家庭情况">
           <Textarea
             defaultValue={user.family_situation}

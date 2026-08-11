@@ -19,6 +19,7 @@ import { useDemoTick } from "@/lib/demo/use-demo-db";
 import {
   canSeeMembersBoard,
   canSeeRegionDashboard,
+  canManageOrg as canManageOrgRole,
   isExecutor,
 } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
@@ -33,6 +34,7 @@ interface SessionContextValue {
   isT3: boolean;
   canSeeRegion: boolean;
   canSeeMembers: boolean;
+  canManageOrg: boolean;
   isExecutorOnly: boolean;
   refresh: () => Promise<void>;
   loginDemo: (profileId: string) => void;
@@ -143,6 +145,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         isT3: role === "T3",
         canSeeRegion: canSeeRegionDashboard(role),
         canSeeMembers: canSeeMembersBoard(role),
+        canManageOrg: canManageOrgRole(role),
         isExecutorOnly: isExecutor(role),
         refresh,
         loginDemo,

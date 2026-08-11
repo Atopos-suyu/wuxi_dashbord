@@ -159,6 +159,7 @@ export const ALERT_TYPES = [
   "家长态度恶化",
   "待办逾期",
   "能力下滑",
+  "目标落后",
 ] as const;
 export type AlertType = (typeof ALERT_TYPES)[number];
 
@@ -172,6 +173,8 @@ export const ALERT_THRESHOLDS = {
   overdueYellowDays: 1,
   overdueRedDays: 3,
   capabilityDropWeeks: 2,
+  /** 周目标达成率低于该比例触发「目标落后」 */
+  goalLagPct: 50,
 } as const;
 
 export type TrafficLight = "green" | "yellow" | "red";
