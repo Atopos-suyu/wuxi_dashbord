@@ -8,13 +8,18 @@ import {
   FUNNEL_STAGES,
   LEVELS,
   ROLE_LABEL,
+  SCHOOL_REGIONS,
   TRAFFIC_LABEL,
   type Level,
+  type SchoolRegion,
   type Stage,
   type TrafficLight,
 } from "@/lib/constants";
 import { computeAlerts, memberTrafficLight } from "@/lib/alerts";
-import { visibleMembers } from "@/lib/permissions";
+import {
+  filterUsersByCampus,
+  visibleMembers,
+} from "@/lib/permissions";
 import { useSession } from "@/components/providers/session-provider";
 import { loadWorkbenchSnapshot } from "@/lib/data";
 import { useLiveQuery } from "@/lib/data/use-live-query";
@@ -35,12 +40,19 @@ const LIGHT_STYLE: Record<TrafficLight, string> = {
 export default function OverviewPage() {
   const { profile, canSeeRegion, loading: sessionLoading } = useSession();
   const router = useRouter();
+  const [campus, setCampus] = useState<SchoolRegion | "all">("all");
   const [area, setArea] = useState("all");
   const [range, setRange] = useState<"week" | "month" | "all">("week");
 
   useEffect(() => {
     if (!sessionLoading && !canSeeRegion) router.replace("/users");
   }, [sessionLoading, canSeeRegion, router]);
+
+  useEffect(() => {
+    if (profile?.role !== "T3" && profile?.school_region) {
+      setCampus(profile.school_region as SchoolRegion);
+    }
+  }, [profile?.id, profile?.role, profile?.school_region]);
 
   const { data, loading } = useLiveQuery(
     async () =>
@@ -51,17 +63,19 @@ export default function OverviewPage() {
   const members = useMemo(() => {
     if (!profile || !data) return [];
     return visibleMembers(profile, data.profiles).filter(
-      (m) => m.role !== "T3" && (area === "all" || m.area === area),
+      (m) =>
+        m.role !== "T3" &&
+        (campus === "all" || m.school_region === campus) &&
+        (area === "all" || m.area === area),
     );
-  }, [profile, data, area]);
+  }, [profile, data, area, campus]);
 
   const users = useMemo(() => {
     if (!data) return [];
-    return data.users.filter((u) => {
-      if (area !== "all" && u.area !== area) return false;
-      return true;
-    });
-  }, [data, area]);
+    let list = filterUsersByCampus(data.users, campus, data.profiles);
+    if (area !== "all") list = list.filter((u) => u.area === area);
+    return list;
+  }, [data, area, campus]);
 
   const alerts = useMemo(() => {
     if (!data) return [];
@@ -110,13 +124,13 @@ export default function OverviewPage() {
             {alerts.filter((a) => !a.resolved).length} 条
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
             variant="secondary"
             onClick={() => {
               downloadCsv("overview-traffic.csv", [
-                ["成员", "角色", "片区", "红绿灯", "原因", "用户数"],
+                ["成员", "角色", "校区", "片区", "红绿灯", "原因", "用户数"],
                 ...members.map((m) => {
                   const { light, reasons } = memberTrafficLight({
                     member: m,
@@ -128,6 +142,7 @@ export default function OverviewPage() {
                   return [
                     m.full_name,
                     ROLE_LABEL[m.role],
+                    m.school_region,
                     m.area ?? "",
                     TRAFFIC_LABEL[light],
                     reasons.join("；"),
@@ -139,6 +154,22 @@ export default function OverviewPage() {
           >
             导出 CSV
           </Button>
+          {profile?.role === "T3" ? (
+            <Select
+              className="w-40"
+              value={campus}
+              onChange={(e) =>
+                setCampus(e.target.value as SchoolRegion | "all")
+              }
+            >
+              <option value="all">全部校区</option>
+              {SCHOOL_REGIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          ) : null}
           <Select
             className="w-28"
             value={area}
@@ -226,6 +257,7 @@ export default function OverviewPage() {
                     {m.full_name}{" "}
                     <span className="text-xs text-[var(--muted)]">
                       {ROLE_LABEL[m.role]}
+                      {m.school_region ? ` · ${m.school_region}` : ""}
                       {m.area ? ` · ${m.area}` : ""}
                     </span>
                   </p>

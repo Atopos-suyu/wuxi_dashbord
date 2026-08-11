@@ -88,6 +88,7 @@ export default function LoginPage() {
                   <span className="block font-medium">{p.full_name}</span>
                   <span className="text-xs text-[var(--muted)]">
                     {ROLE_LABEL[p.role]}
+                    {p.school_region ? ` · ${p.school_region}` : ""}
                     {p.area ? ` · ${p.area}` : ""}
                   </span>
                 </span>

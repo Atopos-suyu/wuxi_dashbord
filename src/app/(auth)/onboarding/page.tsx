@@ -6,9 +6,12 @@ import { toast } from "sonner";
 import {
   AREAS,
   Area,
+  DEFAULT_SCHOOL_REGION,
   Role,
   ROLE_LABEL,
   ROLES,
+  SCHOOL_REGIONS,
+  type SchoolRegion,
 } from "@/lib/constants";
 import { canSeeRegionDashboard } from "@/lib/permissions";
 import { useSession } from "@/components/providers/session-provider";
@@ -24,6 +27,7 @@ export default function OnboardingPage() {
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Role>("T0");
   const [area, setArea] = useState<Area | "">("");
+  const [schoolRegion, setSchoolRegion] = useState<SchoolRegion>(DEFAULT_SCHOOL_REGION);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -31,6 +35,7 @@ export default function OnboardingPage() {
     setFullName(profile.full_name ?? "");
     setRole(profile.role ?? "T0");
     setArea((profile.area as Area) ?? "");
+    setSchoolRegion((profile.school_region as SchoolRegion) || DEFAULT_SCHOOL_REGION);
   }, [profile?.id]);
 
   async function onSubmit(e: FormEvent) {
@@ -44,6 +49,7 @@ export default function OnboardingPage() {
         full_name: fullName,
         role,
         area: area || null,
+        school_region: schoolRegion,
       });
       toast.success("资料已保存");
       router.replace(canSeeRegionDashboard(role) ? "/overview" : "/users");
@@ -68,7 +74,7 @@ export default function OnboardingPage() {
         <p className="text-sm font-medium text-[var(--lake)]">完善资料</p>
         <h1 className="section-title mt-2 text-2xl">开始使用工作台</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          确认姓名、角色与片区后进入对应首页。
+          确认姓名、校区、角色与片区后进入对应首页。
         </p>
 
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
@@ -80,6 +86,20 @@ export default function OnboardingPage() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="campus">校区</Label>
+            <Select
+              id="campus"
+              value={schoolRegion}
+              onChange={(e) => setSchoolRegion(e.target.value as SchoolRegion)}
+            >
+              {SCHOOL_REGIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="role">角色</Label>

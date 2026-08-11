@@ -28,7 +28,7 @@ import type {
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
-const STORAGE_KEY = "wxu_demo_db_v2_2";
+const STORAGE_KEY = "wxu_demo_db_v2_3";
 
 export interface DemoDB {
   profiles: Profile[];
@@ -188,6 +188,8 @@ export function upsertUser(
       channel: input.channel ?? "",
       owner_id: input.owner_id,
       area: input.area ?? owner?.area ?? null,
+      school_region:
+        input.school_region ?? owner?.school_region ?? "无锡学院",
       stage: input.stage ?? "建联",
       six_dim_score: six,
       level: calcLevel(six),
@@ -383,13 +385,14 @@ export function createDemoProfile(input: {
   role: Profile["role"];
   area?: string | null;
   manager_id?: string | null;
+  school_region?: string | null;
 }): Profile {
   const db = loadDemoDB();
   const profile: Profile = {
     id: uid("profile"),
     full_name: input.full_name,
     role: input.role,
-    school_region: "无锡学院",
+    school_region: input.school_region || "无锡学院",
     status: "active",
     area: input.area ?? null,
     manager_id: input.manager_id ?? null,

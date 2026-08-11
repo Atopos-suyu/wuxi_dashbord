@@ -12,6 +12,8 @@ import {
   Role,
   ROLE_LABEL,
   ROLES,
+  SCHOOL_REGIONS,
+  type SchoolRegion,
 } from "@/lib/constants";
 import { listProfiles } from "@/lib/data";
 import { useLiveQuery } from "@/lib/data/use-live-query";
@@ -32,17 +34,22 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("T0");
   const [area, setArea] = useState<Area | "">("");
+  const [schoolRegion, setSchoolRegion] =
+    useState<SchoolRegion>(DEFAULT_SCHOOL_REGION);
   const [managerId, setManagerId] = useState("");
   const [loading, setLoading] = useState(false);
 
   const managers = useMemo(() => {
+    const sameCampus = profiles.filter((p) => p.school_region === schoolRegion);
     if (role === "T2") return profiles.filter((p) => p.role === "T3");
     if (role === "T1")
-      return profiles.filter((p) => p.role === "T2" && (!area || p.area === area));
+      return sameCampus.filter(
+        (p) => p.role === "T2" && (!area || p.area === area),
+      );
     if (role === "T0" || role === "伪T0")
-      return profiles.filter((p) => p.role === "T1");
+      return sameCampus.filter((p) => p.role === "T1");
     return [];
-  }, [profiles, role, area]);
+  }, [profiles, role, area, schoolRegion]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -61,6 +68,7 @@ export default function RegisterPage() {
           role,
           area: area || null,
           manager_id: managerId || null,
+          school_region: schoolRegion,
         });
         setDemoSession(profile.id);
         toast.success("演示账号已创建");
@@ -79,7 +87,7 @@ export default function RegisterPage() {
             role,
             area: area || null,
             manager_id: managerId || null,
-            school_region: DEFAULT_SCHOOL_REGION,
+            school_region: schoolRegion,
           },
         },
       });
@@ -91,7 +99,7 @@ export default function RegisterPage() {
           role,
           area: area || null,
           manager_id: managerId || null,
-          school_region: DEFAULT_SCHOOL_REGION,
+          school_region: schoolRegion,
           status: "active",
         });
       }
@@ -155,6 +163,23 @@ export default function RegisterPage() {
               </div>
             </>
           )}
+          <div className="space-y-2">
+            <Label htmlFor="campus">校区</Label>
+            <Select
+              id="campus"
+              value={schoolRegion}
+              onChange={(e) => {
+                setSchoolRegion(e.target.value as SchoolRegion);
+                setManagerId("");
+              }}
+            >
+              {SCHOOL_REGIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="role">角色</Label>
             <Select

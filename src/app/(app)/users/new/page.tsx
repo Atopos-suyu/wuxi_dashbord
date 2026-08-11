@@ -76,6 +76,8 @@ export default function NewUserPage() {
               owner_id: canSeeMembers
                 ? form.owner_id || profile.id
                 : profile.id,
+              school_region: profile.school_region,
+              area: profile.area ?? null,
               next_action_due: form.next_action_due || null,
               six_dim_score: DEFAULT_SIX_DIM_SCORE,
               deal_amount: null,

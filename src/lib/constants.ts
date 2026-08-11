@@ -1,6 +1,10 @@
 export const APP_NAME = "无锡片区业务工作台";
 export const APP_SHORT_NAME = "WXU 工作台";
-export const DEFAULT_SCHOOL_REGION = "无锡学院";
+
+/** 双校区 */
+export const SCHOOL_REGIONS = ["无锡学院", "无锡太湖学院"] as const;
+export type SchoolRegion = (typeof SCHOOL_REGIONS)[number];
+export const DEFAULT_SCHOOL_REGION: SchoolRegion = "无锡学院";
 
 /** V2 角色：T3 片区总负责 > T2 专业片区 > T1 组长 > T0 执行 */
 export const ROLES = ["T3", "T2", "T1", "T0", "伪T0"] as const;
