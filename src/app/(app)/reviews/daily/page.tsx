@@ -1,45 +1,70 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useSession } from "@/components/providers/session-provider";
-import { loadDemoDB, upsertDaily } from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+import {
+  listDailyReviews,
+  listProfiles,
+  upsertDaily,
+} from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { LoadingBlock } from "@/components/ui/loading";
 import { recentDays } from "@/lib/utils";
 
 export default function DailyReviewPage() {
   const { profile, isT0 } = useSession();
-  useDemoTick();
   const today = format(new Date(), "yyyy-MM-dd");
-  const db = loadDemoDB();
 
-  const mine = db.dailyReviews.find(
+  const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
+  const {
+    data: reviews = [],
+    loading,
+    reload,
+  } = useLiveQuery(() => listDailyReviews(), []);
+
+  const mine = reviews.find(
     (d) => d.member_id === profile?.id && d.review_date === today,
   );
 
   const [form, setForm] = useState({
-    new_contacts: mine?.new_contacts ?? 0,
-    new_a: mine?.new_a ?? 0,
-    private_chats: mine?.private_chats ?? 0,
-    stage_followups: mine?.stage_followups ?? 0,
-    group_active: mine?.group_active ?? 3,
-    highlights: mine?.highlights ?? "",
-    problems: mine?.problems ?? "",
-    next_plan: mine?.next_plan ?? "",
-    support_needed: mine?.support_needed ?? "",
+    new_contacts: 0,
+    new_a: 0,
+    private_chats: 0,
+    stage_followups: 0,
+    group_active: 3,
+    highlights: "",
+    problems: "",
+    next_plan: "",
+    support_needed: "",
   });
+
+  useEffect(() => {
+    if (!mine) return;
+    setForm({
+      new_contacts: mine.new_contacts,
+      new_a: mine.new_a,
+      private_chats: mine.private_chats,
+      stage_followups: mine.stage_followups,
+      group_active: mine.group_active,
+      highlights: mine.highlights,
+      problems: mine.problems,
+      next_plan: mine.next_plan,
+      support_needed: mine.support_needed,
+    });
+  }, [mine?.id])
 
   const [filterMember, setFilterMember] = useState("all");
   const [filterDate, setFilterDate] = useState(today);
 
-  const members = db.profiles.filter((p) => p.role !== "T0");
+  const members = profiles.filter((p) => p.role !== "T0");
   const weekDays = recentDays(7);
 
   const missing = useMemo(() => {
@@ -49,14 +74,14 @@ export default function DailyReviewPage() {
         .slice(-3)
         .every(
           (d) =>
-            !db.dailyReviews.some(
+            !reviews.some(
               (r) => r.member_id === m.id && r.review_date === d,
             ),
         ),
     );
-  }, [isT0, members, weekDays, db.dailyReviews]);
+  }, [isT0, members, weekDays, reviews]);
 
-  const list = db.dailyReviews
+  const list = reviews
     .filter((d) => {
       if (!isT0) return d.member_id === profile?.id;
       if (filterMember !== "all" && d.member_id !== filterMember) return false;
@@ -64,6 +89,8 @@ export default function DailyReviewPage() {
       return true;
     })
     .sort((a, b) => b.review_date.localeCompare(a.review_date));
+
+  if (loading) return <LoadingBlock />;
 
   return (
     <div className="space-y-4">
@@ -75,72 +102,77 @@ export default function DailyReviewPage() {
       </div>
 
       <form
-          className="panel space-y-3 p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!profile) return;
-            upsertDaily({
+        className="panel space-y-3 p-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!profile) return;
+          try {
+            await upsertDaily({
               member_id: profile.id,
               review_date: today,
               ...form,
             });
+            reload();
             toast.success(mine ? "日报已更新" : "日报已提交");
-          }}
-        >
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            {(
-              [
-                ["new_contacts", "今日加人"],
-                ["new_a", "新增 A 类"],
-                ["private_chats", "主动私聊"],
-                ["stage_followups", "阶段跟进"],
-              ] as const
-            ).map(([key, label]) => (
-              <div key={key} className="space-y-2">
-                <Label>{label}</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form[key]}
-                  onChange={(e) =>
-                    setForm({ ...form, [key]: Number(e.target.value) })
-                  }
-                />
-              </div>
-            ))}
-            <div className="space-y-2">
-              <Label>群活跃 (1-5)</Label>
-              <Input
-                type="number"
-                min={1}
-                max={5}
-                value={form.group_active}
-                onChange={(e) =>
-                  setForm({ ...form, group_active: Number(e.target.value) })
-                }
-              />
-            </div>
-          </div>
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "提交失败");
+          }
+        }}
+      >
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {(
             [
-              ["highlights", "今天做得好"],
-              ["problems", "遇到的问题"],
-              ["next_plan", "明天计划"],
-              ["support_needed", "需要负责人支持"],
+              ["new_contacts", "今日加人"],
+              ["new_a", "新增 A 类"],
+              ["private_chats", "主动私聊"],
+              ["stage_followups", "阶段跟进"],
             ] as const
           ).map(([key, label]) => (
             <div key={key} className="space-y-2">
               <Label>{label}</Label>
-              <Textarea
+              <Input
+                type="number"
+                min={0}
                 value={form[key]}
-                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, [key]: Number(e.target.value) })
+                }
               />
             </div>
           ))}
-          <Button className="w-full" type="submit">
-            {mine ? "更新今日复盘" : "提交今日复盘"}
-          </Button>
-        </form>
+          <div className="space-y-2">
+            <Label>群活跃 (1-5)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={5}
+              value={form.group_active}
+              onChange={(e) =>
+                setForm({ ...form, group_active: Number(e.target.value) })
+              }
+            />
+          </div>
+        </div>
+        {(
+          [
+            ["highlights", "今天做得好"],
+            ["problems", "遇到的问题"],
+            ["next_plan", "明天计划"],
+            ["support_needed", "需要负责人支持"],
+          ] as const
+        ).map(([key, label]) => (
+          <div key={key} className="space-y-2">
+            <Label>{label}</Label>
+            <Textarea
+              value={form[key]}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+            />
+          </div>
+        ))}
+        <Button className="w-full" type="submit">
+          {mine ? "更新今日复盘" : "提交今日复盘"}
+        </Button>
+      </form>
 
       {isT0 ? (
         <>
@@ -169,7 +201,7 @@ export default function DailyReviewPage() {
           </div>
           <div className="space-y-3">
             {list.map((item) => {
-              const member = db.profiles.find((p) => p.id === item.member_id);
+              const member = profiles.find((p) => p.id === item.member_id);
               return (
                 <article key={item.id} className="panel p-4">
                   <div className="flex items-center justify-between">

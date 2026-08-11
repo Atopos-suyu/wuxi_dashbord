@@ -3,31 +3,35 @@
 import { useMemo, useState } from "react";
 import { STAGES } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
-import { listRecordings, loadDemoDB } from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+import { listProfiles, listRecordings } from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { Select } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty";
+import { LoadingBlock } from "@/components/ui/loading";
 import { StageBadge } from "@/components/users/stage-badge";
 import { formatDateTime } from "@/lib/utils";
 
 export default function RecordingsPage() {
   const { profile, isT0 } = useSession();
-  useDemoTick();
-
   const [memberId, setMemberId] = useState("all");
   const [stage, setStage] = useState("all");
   const [userId, setUserId] = useState("all");
 
-  const db = loadDemoDB();
-  const members = db.profiles.filter((p) => p.role !== "T0");
-  const recordings = profile ? listRecordings(profile) : [];
+  const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
+  const { data: recordings = [], loading } = useLiveQuery(
+    async () => (profile ? listRecordings(profile) : []),
+    [profile?.id, profile?.role],
+  );
+
+  const members = profiles.filter((p) => p.role !== "T0");
 
   const users = useMemo(() => {
-    const ids = Array.from(new Set(recordings.map((r) => r.user_id)));
-    return ids
-      .map((id) => db.users.find((u) => u.id === id))
-      .filter(Boolean);
-  }, [recordings, db.users]);
+    const map = new Map<string, string>();
+    for (const r of recordings) {
+      if (r.user) map.set(r.user.id, r.user.name);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [recordings]);
 
   const filtered = recordings.filter((r) => {
     if (memberId !== "all" && r.owner_id !== memberId) return false;
@@ -35,6 +39,8 @@ export default function RecordingsPage() {
     if (userId !== "all" && r.user_id !== userId) return false;
     return true;
   });
+
+  if (loading) return <LoadingBlock />;
 
   return (
     <div className="space-y-4">
@@ -63,8 +69,8 @@ export default function RecordingsPage() {
         <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
           <option value="all">全部用户</option>
           {users.map((u) => (
-            <option key={u!.id} value={u!.id}>
-              {u!.name}
+            <option key={u.id} value={u.id}>
+              {u.name}
             </option>
           ))}
         </Select>
@@ -100,12 +106,19 @@ export default function RecordingsPage() {
               {r.record_url?.startsWith("demo://") ? (
                 <p className="mt-3 rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
                   演示占位录音：{r.record_url}
-                  <br />
-                  接入 Supabase Storage 后可在线播放（路径
-                  recordings/&#123;owner&#125;/&#123;user&#125;/&#123;ts&#125;.m4a）
                 </p>
+              ) : r.record_url &&
+                (r.record_url.startsWith("http") ||
+                  r.record_url.startsWith("blob:")) ? (
+                <audio
+                  className="mt-3 w-full"
+                  controls
+                  src={r.record_url}
+                />
               ) : (
-                <audio className="mt-3 w-full" controls src={r.record_url ?? undefined} />
+                <p className="mt-3 text-xs text-[var(--muted)]">
+                  录音路径：{r.record_url}
+                </p>
               )}
             </article>
           ))}

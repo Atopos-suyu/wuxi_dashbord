@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useState,
-  useSyncExternalStore,
 } from "react";
 import { isDemoMode } from "@/lib/mode";
 import {
@@ -14,8 +13,9 @@ import {
   getDemoSession,
   loadDemoDB,
   setDemoSession,
-  updateProfile,
 } from "@/lib/demo/store";
+import { updateProfile as updateProfileData } from "@/lib/data";
+import { useDemoTick } from "@/lib/demo/use-demo-db";
 import type { Profile } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -35,21 +35,11 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-function subscribeDemo(cb: () => void) {
-  window.addEventListener("wxu-demo-updated", cb);
-  return () => window.removeEventListener("wxu-demo-updated", cb);
-}
-
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const demo = isDemoMode();
+  const tick = useDemoTick();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useSyncExternalStore(
-    demo ? subscribeDemo : () => () => {},
-    () => 0,
-    () => 0,
-  );
 
   const refresh = useCallback(async () => {
     if (demo) {
@@ -77,7 +67,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, tick]);
+
+  useEffect(() => {
+    if (demo) return;
+    const supabase = createClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void refresh();
+    });
+    return () => subscription.unsubscribe();
+  }, [demo, refresh]);
 
   const loginDemo = (profileId: string) => {
     setDemoSession(profileId);
@@ -100,7 +101,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     role: Profile["role"];
   }) => {
     if (demo && profile) {
-      updateProfile(profile.id, data);
+      await updateProfileData(profile.id, data);
       setProfile({ ...profile, ...data });
       return;
     }

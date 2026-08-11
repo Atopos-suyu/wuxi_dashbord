@@ -5,12 +5,13 @@ import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { LEVELS, STAGES } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
-import { listUsersFor, loadDemoDB } from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+import { listProfiles, listUsersFor } from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty";
+import { LoadingBlock } from "@/components/ui/loading";
 import { LevelBadge } from "@/components/users/level-badge";
 import { StageBadge } from "@/components/users/stage-badge";
 import { formatDate } from "@/lib/utils";
@@ -18,13 +19,12 @@ import type { CampusUser } from "@/lib/types";
 
 export default function UsersPage() {
   const { profile, isT0 } = useSession();
-  const tick = useDemoTick();
-
-  const users = useMemo(
-    () => (profile ? listUsersFor(profile) : []),
-    [profile, tick],
+  const { data: users = [], loading } = useLiveQuery(
+    async () => (profile ? listUsersFor(profile) : []),
+    [profile?.id, profile?.role],
   );
-  const members = loadDemoDB().profiles.filter((p) => p.role !== "T0");
+  const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
+  const members = profiles.filter((p) => p.role !== "T0");
 
   const [q, setQ] = useState("");
   const [stage, setStage] = useState("all");
@@ -32,7 +32,10 @@ export default function UsersPage() {
   const [owner, setOwner] = useState("all");
   const [major, setMajor] = useState("all");
 
-  const majors = Array.from(new Set(users.map((u) => u.major).filter(Boolean)));
+  const majors = useMemo(
+    () => Array.from(new Set(users.map((u) => u.major).filter(Boolean))),
+    [users],
+  );
 
   const filtered = users.filter((u) => {
     if (stage !== "all" && u.stage !== stage) return false;
@@ -45,6 +48,8 @@ export default function UsersPage() {
     }
     return true;
   });
+
+  if (loading) return <LoadingBlock />;
 
   return (
     <div className="space-y-4">
@@ -192,7 +197,10 @@ function UserCard({
   showOwner: boolean;
 }) {
   return (
-    <Link href={`/users/${user.id}`} className="panel block p-4 transition hover:border-[var(--accent)]">
+    <Link
+      href={`/users/${user.id}`}
+      className="panel block p-4 transition hover:border-[var(--accent)]"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-lg font-semibold">{user.name}</p>

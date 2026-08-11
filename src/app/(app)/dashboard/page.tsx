@@ -10,8 +10,8 @@ import {
   type Stage,
 } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
-import { listUsersFor, loadDemoDB } from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+import { loadWorkbenchSnapshot } from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { FunnelBars } from "@/components/charts/funnel-bars";
 import { LevelDonut } from "@/components/charts/level-donut";
 import { Button } from "@/components/ui/button";
@@ -20,19 +20,22 @@ import { LoadingBlock } from "@/components/ui/loading";
 import { downloadCsv, isWithinRange } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const { profile, isT0, loading } = useSession();
+  const { profile, isT0, loading: sessionLoading } = useSession();
   const router = useRouter();
-  const tick = useDemoTick();
   const [range, setRange] = useState<"week" | "month" | "all">("week");
 
   useEffect(() => {
-    if (!loading && !isT0) router.replace("/users");
-  }, [loading, isT0, router]);
+    if (!sessionLoading && !isT0) router.replace("/users");
+  }, [sessionLoading, isT0, router]);
 
-  const users = useMemo(
-    () => (profile && isT0 ? listUsersFor(profile) : []),
-    [profile, isT0, tick],
+  const { data, loading } = useLiveQuery(
+    async () =>
+      profile && isT0 ? loadWorkbenchSnapshot(profile) : null,
+    [profile?.id, isT0],
   );
+
+  const users = data?.users ?? [];
+  const profiles = data?.profiles ?? [];
 
   const funnelStock = useMemo(
     () =>
@@ -65,11 +68,12 @@ export default function DashboardPage() {
     users.length === 0
       ? 0
       : Math.round(
-          (users.filter((u) => u.stage === "成交").length / users.length) * 1000,
+          (users.filter((u) => u.stage === "成交").length / users.length) *
+            1000,
         ) / 10;
 
   const ranking = useMemo(() => {
-    const members = loadDemoDB().profiles.filter((p) => p.role !== "T0");
+    const members = profiles.filter((p) => p.role !== "T0");
     return members
       .map((m) => {
         const mine = users.filter((u) => u.owner_id === m.id);
@@ -84,7 +88,7 @@ export default function DashboardPage() {
       .sort(
         (a, b) => b.deals - a.deals || b.aCount - a.aCount || b.total - a.total,
       );
-  }, [users]);
+  }, [users, profiles]);
 
   const metrics = [
     { label: "总用户", value: users.length },
@@ -94,7 +98,7 @@ export default function DashboardPage() {
     { label: "转化率", value: `${conversion}%` },
   ];
 
-  if (loading || !isT0) return <LoadingBlock />;
+  if (sessionLoading || !isT0 || loading) return <LoadingBlock />;
 
   return (
     <div className="space-y-4">
@@ -103,7 +107,9 @@ export default function DashboardPage() {
           <h1 className="section-title text-2xl md:text-3xl">全局看板</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             T0 一眼看清漏斗、等级与成员产出
-            {range !== "all" ? ` · 筛选：${range === "week" ? "本周" : "本月"}` : ""}
+            {range !== "all"
+              ? ` · 筛选：${range === "week" ? "本周" : "本月"}`
+              : ""}
           </p>
         </div>
         <div className="flex gap-2">

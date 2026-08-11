@@ -13,11 +13,12 @@ import {
 } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
 import {
-  loadDemoDB,
+  listCapabilities,
+  listProfiles,
   updateProfile,
   upsertCapability,
-} from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+} from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { ScoreRadar } from "@/components/charts/radar-chart";
 import { TrendLine } from "@/components/charts/trend-line";
 import { Button } from "@/components/ui/button";
@@ -31,31 +32,37 @@ import { currentWeekPeriod } from "@/lib/utils";
 export default function MemberDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { isT0, loading } = useSession();
-  const tick = useDemoTick();
+  const { isT0, loading: sessionLoading } = useSession();
   const week = currentWeekPeriod();
 
-  const db = useMemo(() => loadDemoDB(), [tick]);
-  const member = db.profiles.find((p) => p.id === params.id);
-  const caps = useMemo(
-    () =>
-      db.capabilities
-        .filter((c) => c.member_id === params.id)
-        .sort((a, b) => a.period.localeCompare(b.period)),
-    [db, params.id],
+  useEffect(() => {
+    if (!sessionLoading && !isT0) router.replace("/users");
+  }, [sessionLoading, isT0, router]);
+
+  const {
+    data: profiles = [],
+    loading: profilesLoading,
+    reload: reloadProfiles,
+  } = useLiveQuery(() => listProfiles(), []);
+  const {
+    data: caps = [],
+    loading: capsLoading,
+    reload: reloadCaps,
+  } = useLiveQuery(() => listCapabilities(params.id), [params.id]);
+
+  const member = profiles.find((p) => p.id === params.id);
+  const sortedCaps = useMemo(
+    () => [...caps].sort((a, b) => a.period.localeCompare(b.period)),
+    [caps],
   );
-  const latest = caps.find((c) => c.period === week) ?? caps.at(-1);
-  const prev = caps.length >= 2 ? caps[caps.length - 2] : null;
+  const latest = sortedCaps.find((c) => c.period === week) ?? sortedCaps.at(-1);
+  const prev = sortedCaps.length >= 2 ? sortedCaps[sortedCaps.length - 2] : null;
 
   const [scores, setScores] = useState<CapabilityScores>(
     DEFAULT_CAPABILITY_SCORES,
   );
   const [note, setNote] = useState("");
   const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    if (!loading && !isT0) router.replace("/users");
-  }, [loading, isT0, router]);
 
   useEffect(() => {
     if (latest && !hydrated) {
@@ -75,7 +82,7 @@ export default function MemberDetailPage() {
     [scores, prev],
   );
 
-  const trend = caps.slice(-8).map((c) => {
+  const trend = sortedCaps.slice(-8).map((c) => {
     const avg =
       CAPABILITY_KEYS.reduce((sum, k) => sum + (c.scores[k] ?? 0), 0) /
       CAPABILITY_KEYS.length;
@@ -87,7 +94,9 @@ export default function MemberDetailPage() {
     };
   });
 
-  if (loading || !isT0) return <LoadingBlock />;
+  if (sessionLoading || !isT0 || profilesLoading || capsLoading) {
+    return <LoadingBlock />;
+  }
   if (!member) return <EmptyState title="成员不存在" />;
 
   return (
@@ -104,10 +113,11 @@ export default function MemberDetailPage() {
         <Select
           className="w-32"
           value={member.status}
-          onChange={(e) => {
-            updateProfile(member.id, {
+          onChange={async (e) => {
+            await updateProfile(member.id, {
               status: e.target.value as MemberStatus,
             });
+            reloadProfiles();
             toast.success("状态已更新");
           }}
         >
@@ -172,13 +182,14 @@ export default function MemberDetailPage() {
         </div>
         <Button
           className="w-full"
-          onClick={() => {
-            upsertCapability({
+          onClick={async () => {
+            await upsertCapability({
               member_id: member.id,
               period: week,
               scores,
               review_note: note,
             });
+            reloadCaps();
             toast.success("能力评分已保存");
           }}
         >

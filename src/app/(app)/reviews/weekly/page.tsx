@@ -1,28 +1,45 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FUNNEL_STAGES } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
 import {
+  listCapabilities,
+  listProfiles,
   listUsersFor,
-  loadDemoDB,
+  listWeeklyReviews,
   upsertWeekly,
-} from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+} from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { LoadingBlock } from "@/components/ui/loading";
 import { currentWeekPeriod, downloadCsv, weekStartISO } from "@/lib/utils";
 
 export default function WeeklyReviewPage() {
   const { profile, isT0 } = useSession();
-  useDemoTick();
-
   const weekStart = weekStartISO();
   const weekPeriod = currentWeekPeriod();
-  const db = loadDemoDB();
-  const users = profile ? listUsersFor(profile) : [];
+
+  const { data: users = [], loading: usersLoading } = useLiveQuery(
+    async () => (profile ? listUsersFor(profile) : []),
+    [profile?.id],
+  );
+  const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
+  const { data: capabilities = [] } = useLiveQuery(
+    () => listCapabilities(profile?.id),
+    [profile?.id],
+  );
+  const {
+    data: weekly = [],
+    loading: weeklyLoading,
+    reload,
+  } = useLiveQuery(
+    () => listWeeklyReviews(isT0 ? undefined : profile?.id),
+    [profile?.id, isT0],
+  );
 
   const funnelSnapshot = useMemo(() => {
     const map: Record<string, number> = {};
@@ -33,20 +50,28 @@ export default function WeeklyReviewPage() {
   }, [users]);
 
   const capability =
-    db.capabilities.find(
+    capabilities.find(
       (c) => c.member_id === profile?.id && c.period === weekPeriod,
     )?.scores ?? null;
 
-  const existing = db.weeklyReviews.find(
+  const existing = weekly.find(
     (w) => w.member_id === profile?.id && w.week_start === weekStart,
   );
 
-  const [summary, setSummary] = useState(existing?.summary ?? "");
-  const [planNext, setPlanNext] = useState(existing?.plan_next ?? "");
+  const [summary, setSummary] = useState("");
+  const [planNext, setPlanNext] = useState("");
 
-  const allWeekly = db.weeklyReviews
-    .filter((w) => (isT0 ? true : w.member_id === profile?.id))
-    .sort((a, b) => b.week_start.localeCompare(a.week_start));
+  useEffect(() => {
+    if (!existing) return;
+    setSummary(existing.summary);
+    setPlanNext(existing.plan_next);
+  }, [existing?.id]);
+
+  const allWeekly = [...weekly].sort((a, b) =>
+    b.week_start.localeCompare(a.week_start),
+  );
+
+  if (usersLoading || weeklyLoading) return <LoadingBlock />;
 
   return (
     <div className="space-y-4">
@@ -65,7 +90,7 @@ export default function WeeklyReviewPage() {
               downloadCsv("weekly-reviews.csv", [
                 ["成员", "周起始", "总结", "下周计划"],
                 ...allWeekly.map((w) => [
-                  db.profiles.find((p) => p.id === w.member_id)?.full_name ?? "",
+                  profiles.find((p) => p.id === w.member_id)?.full_name ?? "",
                   w.week_start,
                   w.summary,
                   w.plan_next,
@@ -97,18 +122,23 @@ export default function WeeklyReviewPage() {
 
       <form
         className="panel space-y-3 p-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           if (!profile) return;
-          upsertWeekly({
-            member_id: profile.id,
-            week_start: weekStart,
-            summary,
-            funnel_summary: funnelSnapshot,
-            capability_snapshot: capability,
-            plan_next: planNext,
-          });
-          toast.success(existing ? "周报已更新" : "周报已生成");
+          try {
+            await upsertWeekly({
+              member_id: profile.id,
+              week_start: weekStart,
+              summary,
+              funnel_summary: funnelSnapshot,
+              capability_snapshot: capability,
+              plan_next: planNext,
+            });
+            reload();
+            toast.success(existing ? "周报已更新" : "周报已生成");
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "保存失败");
+          }
         }}
       >
         <div className="space-y-2">
@@ -144,7 +174,7 @@ export default function WeeklyReviewPage() {
         <section className="space-y-3">
           <h2 className="font-semibold">周报总览</h2>
           {allWeekly.map((w) => {
-            const member = db.profiles.find((p) => p.id === w.member_id);
+            const member = profiles.find((p) => p.id === w.member_id);
             const deals = w.funnel_summary?.["成交"] ?? 0;
             const interviews = w.funnel_summary?.["面试"] ?? 0;
             return (

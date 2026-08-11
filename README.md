@@ -35,6 +35,16 @@ supabase db push
 
 4. 注册账号后完善档案即可使用。录音上传路径：`recordings/{owner_id}/{user_id}/{timestamp}.m4a`。
 
+
+## 数据层
+
+业务页面统一走 `src/lib/data`：
+
+- 未配置 Supabase → 演示模式（localStorage）
+- 已配置并 `NEXT_PUBLIC_DEMO_MODE=false` → Supabase（含 Storage 录音上传与签名播放）
+
+录音路径：`recordings/{owner_id}/{user_id}/{timestamp}.m4a`
+
 ## 功能清单
 
 | 模块 | 说明 |

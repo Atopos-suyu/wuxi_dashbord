@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -18,9 +18,10 @@ import {
   addStageLog,
   getUser,
   listStageLogs,
+  uploadRecording,
   upsertUser,
-} from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+} from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { ScoreRadar } from "@/components/charts/radar-chart";
 import { LevelBadge } from "@/components/users/level-badge";
 import { StageBadge } from "@/components/users/stage-badge";
@@ -30,24 +31,55 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty";
+import { LoadingBlock } from "@/components/ui/loading";
 import { formatDateTime } from "@/lib/utils";
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { profile } = useSession();
-  const tick = useDemoTick();
-  const user = useMemo(() => getUser(params.id), [params.id, tick]);
-  const logs = useMemo(() => listStageLogs(params.id), [params.id, tick]);
+
+  const {
+    data: user,
+    loading,
+    reload,
+  } = useLiveQuery(() => getUser(params.id), [params.id]);
+  const { data: logs = [], reload: reloadLogs } = useLiveQuery(
+    () => listStageLogs(params.id),
+    [params.id],
+  );
 
   const [six, setSix] = useState<SixDimScore | null>(null);
   const [note, setNote] = useState("");
   const [nextStage, setNextStage] = useState<Stage>("面试");
   const [status, setStatus] = useState<StageLogStatus>("done");
   const [recordUrl, setRecordUrl] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  if (!user || !profile) {
+  useEffect(() => {
+    if (user) {
+      const idx = Math.min(STAGES.indexOf(user.stage) + 1, STAGES.length - 1);
+      setNextStage(STAGES[idx]);
+    }
+  }, [user?.id, user?.stage]);
+
+  const score = six ?? user?.six_dim_score ?? null;
+  const liveLevel = score ? calcLevel(normalizeSixDim(score)) : "B";
+  const radarData = useMemo(
+    () =>
+      score
+        ? SIX_DIM_KEYS.map((k) => ({
+            subject: k.replace("意识", "").replace("学习", "学"),
+            score: score[k],
+          }))
+        : [],
+    [score],
+  );
+
+  if (loading) return <LoadingBlock />;
+
+  if (!user || !profile || !score) {
     return (
       <EmptyState
         title="用户不存在或无权访问"
@@ -63,19 +95,6 @@ export default function UserDetailPage() {
   if (profile.role !== "T0" && user.owner_id !== profile.id) {
     return <EmptyState title="无权查看该用户" />;
   }
-
-  const score = six ?? user.six_dim_score;
-  const liveLevel = calcLevel(normalizeSixDim(score));
-
-  const radarData = SIX_DIM_KEYS.map((k) => ({
-    subject: k.replace("意识", "").replace("学习", "学"),
-    score: score[k],
-  }));
-
-  const nextIndex = Math.min(
-    STAGES.indexOf(user.stage) + 1,
-    STAGES.length - 1,
-  );
 
   return (
     <div className="space-y-4">
@@ -116,11 +135,10 @@ export default function UserDetailPage() {
                 value={score[key]}
                 className="flex-1 accent-[var(--lake)]"
                 onChange={(e) => {
-                  const next = {
+                  setSix({
                     ...score,
                     [key]: Number(e.target.value),
-                  } as SixDimScore;
-                  setSix(next);
+                  } as SixDimScore);
                 }}
               />
               <span className="w-4 text-sm font-semibold">{score[key]}</span>
@@ -129,15 +147,20 @@ export default function UserDetailPage() {
         </div>
         <Button
           className="mt-4 w-full"
-          onClick={() => {
-            upsertUser({
-              id: user.id,
-              name: user.name,
-              owner_id: user.owner_id,
-              six_dim_score: normalizeSixDim(score),
-            });
-            setSix(null);
-            toast.success(`评分已保存，等级：${liveLevel}`);
+          onClick={async () => {
+            try {
+              await upsertUser({
+                id: user.id,
+                name: user.name,
+                owner_id: user.owner_id,
+                six_dim_score: normalizeSixDim(score),
+              });
+              setSix(null);
+              reload();
+              toast.success(`评分已保存，等级：${liveLevel}`);
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "保存失败");
+            }
           }}
         >
           保存六维评分
@@ -150,9 +173,8 @@ export default function UserDetailPage() {
           <div className="space-y-2">
             <Label>推进到</Label>
             <Select
-              value={nextStage || STAGES[nextIndex]}
+              value={nextStage}
               onChange={(e) => setNextStage(e.target.value as Stage)}
-              defaultValue={STAGES[nextIndex]}
             >
               {STAGES.map((s) => (
                 <option key={s} value={s}>
@@ -190,47 +212,53 @@ export default function UserDetailPage() {
             accept="audio/*,.m4a,.mp3,.wav"
             onChange={async (e) => {
               const file = e.target.files?.[0];
-              if (!file) return;
+              if (!file || !profile) return;
               setUploading(true);
               try {
-                // 演示模式：用 object URL 本地播放；正式环境走 Supabase Storage
-                const url = URL.createObjectURL(file);
+                const url = await uploadRecording(file, profile.id, user.id);
                 setRecordUrl(url);
-                toast.success("录音已就绪（演示本地预览）");
+                setPreviewUrl(
+                  url.startsWith("http") || url.startsWith("blob:")
+                    ? url
+                    : null,
+                );
+                toast.success("录音已上传");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "上传失败");
               } finally {
                 setUploading(false);
               }
             }}
           />
-          {recordUrl ? (
-            <audio controls className="mt-2 w-full" src={recordUrl} />
+          {previewUrl ? (
+            <audio controls className="mt-2 w-full" src={previewUrl} />
+          ) : recordUrl ? (
+            <p className="text-xs text-[var(--muted)]">已上传：{recordUrl}</p>
           ) : null}
         </div>
         <Button
           className="w-full"
           disabled={uploading}
-          onClick={() => {
-            const stage = nextStage || STAGES[nextIndex];
-            addStageLog({
-              user_id: user.id,
-              stage,
-              status,
-              note,
-              record_url: recordUrl,
-              owner_id: profile.id,
-              advanceUser: status !== "failed",
-            });
-            if (stage === "成交") {
-              upsertUser({
-                id: user.id,
-                name: user.name,
-                owner_id: user.owner_id,
-                stage: "成交",
+          onClick={async () => {
+            try {
+              await addStageLog({
+                user_id: user.id,
+                stage: nextStage,
+                status,
+                note,
+                record_url: recordUrl,
+                owner_id: profile.id,
+                advanceUser: status !== "failed",
               });
+              setNote("");
+              setRecordUrl(null);
+              setPreviewUrl(null);
+              reload();
+              reloadLogs();
+              toast.success(`已记录：${nextStage}`);
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "提交失败");
             }
-            setNote("");
-            setRecordUrl(null);
-            toast.success(`已记录：${stage}`);
           }}
         >
           提交推进记录
@@ -243,14 +271,15 @@ export default function UserDetailPage() {
           <Field label="家长态度">
             <Select
               defaultValue={user.parent_attitude}
-              onChange={(e) =>
-                upsertUser({
+              onChange={async (e) => {
+                await upsertUser({
                   id: user.id,
                   name: user.name,
                   owner_id: user.owner_id,
                   parent_attitude: e.target.value,
-                })
-              }
+                });
+                reload();
+              }}
             >
               {PARENT_ATTITUDES.map((p) => (
                 <option key={p} value={p}>
@@ -263,68 +292,73 @@ export default function UserDetailPage() {
             <Input
               type="number"
               defaultValue={user.deal_amount ?? ""}
-              onBlur={(e) =>
-                upsertUser({
+              onBlur={async (e) => {
+                await upsertUser({
                   id: user.id,
                   name: user.name,
                   owner_id: user.owner_id,
                   deal_amount: e.target.value ? Number(e.target.value) : null,
-                })
-              }
+                });
+                reload();
+              }}
             />
           </Field>
           <Field label="下一步待办">
             <Input
               defaultValue={user.next_action}
-              onBlur={(e) =>
-                upsertUser({
+              onBlur={async (e) => {
+                await upsertUser({
                   id: user.id,
                   name: user.name,
                   owner_id: user.owner_id,
                   next_action: e.target.value,
-                })
-              }
+                });
+                reload();
+              }}
             />
           </Field>
           <Field label="待办截止">
             <Input
               type="date"
               defaultValue={user.next_action_due ?? ""}
-              onBlur={(e) =>
-                upsertUser({
+              onBlur={async (e) => {
+                await upsertUser({
                   id: user.id,
                   name: user.name,
                   owner_id: user.owner_id,
                   next_action_due: e.target.value || null,
-                })
-              }
+                });
+                reload();
+              }}
             />
           </Field>
         </div>
         <Field label="家庭情况">
           <Textarea
             defaultValue={user.family_situation}
-            onBlur={(e) =>
-              upsertUser({
+            onBlur={async (e) => {
+              await upsertUser({
                 id: user.id,
                 name: user.name,
                 owner_id: user.owner_id,
                 family_situation: e.target.value,
-              })
-            }
+              });
+              reload();
+            }}
           />
         </Field>
         <Field label="总备注">
           <Textarea
             defaultValue={user.remark}
-            onBlur={(e) =>
-              upsertUser({
+            onBlur={async (e) => {
+              await upsertUser({
                 id: user.id,
                 name: user.name,
                 owner_id: user.owner_id,
                 remark: e.target.value,
-              })
-            }
+              });
+              reload();
+            }}
           />
         </Field>
       </section>
@@ -336,7 +370,10 @@ export default function UserDetailPage() {
         ) : (
           <ol className="space-y-4">
             {logs.map((log) => (
-              <li key={log.id} className="relative border-l-2 border-[var(--line)] pl-4">
+              <li
+                key={log.id}
+                className="relative border-l-2 border-[var(--line)] pl-4"
+              >
                 <div className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-[var(--lake)]" />
                 <div className="flex flex-wrap items-center gap-2">
                   <StageBadge stage={log.stage} />
@@ -347,24 +384,17 @@ export default function UserDetailPage() {
                 <p className="mt-1 text-sm text-[var(--ink-soft)]">
                   {log.note || "（无备注）"}
                 </p>
-                {log.record_url ? (
-                  <audio
-                    className="mt-2 w-full"
-                    controls
-                    src={
-                      log.record_url.startsWith("demo://")
-                        ? undefined
-                        : log.record_url
-                    }
-                  >
-                    {log.record_url.startsWith("demo://")
-                      ? "演示录音占位"
-                      : null}
-                  </audio>
+                {log.record_url &&
+                (log.record_url.startsWith("http") ||
+                  log.record_url.startsWith("blob:")) ? (
+                  <audio className="mt-2 w-full" controls src={log.record_url} />
                 ) : null}
-                {log.record_url?.startsWith("demo://") ? (
+                {log.record_url?.startsWith("demo://") ||
+                (log.record_url &&
+                  !log.record_url.startsWith("http") &&
+                  !log.record_url.startsWith("blob:")) ? (
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    演示录音：{log.record_url}
+                    录音：{log.record_url}
                   </p>
                 ) : null}
               </li>

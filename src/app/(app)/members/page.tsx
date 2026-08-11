@@ -9,27 +9,33 @@ import {
   type CapabilityScores,
 } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
-import { listUsersFor, loadDemoDB } from "@/lib/demo/store";
-import { useDemoTick } from "@/lib/demo/use-demo-db";
+import { loadWorkbenchSnapshot } from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { ScoreRadar } from "@/components/charts/radar-chart";
 import { Badge } from "@/components/ui/badge";
 import { LoadingBlock } from "@/components/ui/loading";
 import { currentWeekPeriod, recentDays } from "@/lib/utils";
 
 export default function MembersPage() {
-  const { profile, isT0, loading } = useSession();
+  const { profile, isT0, loading: sessionLoading } = useSession();
   const router = useRouter();
-  useDemoTick();
 
   useEffect(() => {
-    if (!loading && !isT0) router.replace("/users");
-  }, [loading, isT0, router]);
+    if (!sessionLoading && !isT0) router.replace("/users");
+  }, [sessionLoading, isT0, router]);
 
-  if (loading || !isT0 || !profile) return <LoadingBlock />;
+  const { data, loading } = useLiveQuery(
+    async () =>
+      profile && isT0 ? loadWorkbenchSnapshot(profile) : null,
+    [profile?.id, isT0],
+  );
 
-  const db = loadDemoDB();
-  const members = db.profiles.filter((p) => p.role !== "T0");
-  const users = listUsersFor(profile);
+  if (sessionLoading || !isT0 || !profile || loading) return <LoadingBlock />;
+
+  const members = (data?.profiles ?? []).filter((p) => p.role !== "T0");
+  const users = data?.users ?? [];
+  const capabilities = data?.capabilities ?? [];
+  const dailyReviews = data?.dailyReviews ?? [];
   const week = currentWeekPeriod();
   const last3 = recentDays(3);
 
@@ -45,14 +51,14 @@ export default function MembersPage() {
       <div className="stagger grid gap-4 md:grid-cols-2">
         {members.map((m) => {
           const mine = users.filter((u) => u.owner_id === m.id);
-          const caps = db.capabilities
+          const caps = capabilities
             .filter((c) => c.member_id === m.id)
             .sort((a, b) => a.period.localeCompare(b.period));
           const latest = caps.find((c) => c.period === week) ?? caps.at(-1);
           const prev = caps.length > 1 ? caps[caps.length - 2] : null;
           const missingDaily = last3.every(
             (d) =>
-              !db.dailyReviews.some(
+              !dailyReviews.some(
                 (r) => r.member_id === m.id && r.review_date === d,
               ),
           );

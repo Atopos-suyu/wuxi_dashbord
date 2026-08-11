@@ -12,7 +12,8 @@ import {
   type Stage,
 } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
-import { loadDemoDB, upsertUser } from "@/lib/demo/store";
+import { listProfiles, upsertUser } from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +23,8 @@ import { Textarea } from "@/components/ui/textarea";
 export default function NewUserPage() {
   const router = useRouter();
   const { profile, isT0 } = useSession();
-  const members = loadDemoDB().profiles.filter((p) => p.role !== "T0");
+  const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
+  const members = profiles.filter((p) => p.role !== "T0");
 
   const [form, setForm] = useState<{
     name: string;
@@ -62,12 +64,12 @@ export default function NewUserPage() {
 
       <form
         className="panel space-y-4 p-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           if (!profile) return;
           setSaving(true);
           try {
-            const user = upsertUser({
+            const user = await upsertUser({
               ...form,
               owner_id: isT0 ? form.owner_id || profile.id : profile.id,
               next_action_due: form.next_action_due || null,
@@ -155,7 +157,7 @@ export default function NewUserPage() {
         {isT0 ? (
           <Field label="负责人">
             <Select
-              value={form.owner_id}
+              value={form.owner_id || profile?.id}
               onChange={(e) => setForm({ ...form, owner_id: e.target.value })}
             >
               <option value={profile?.id}>{profile?.full_name}（我）</option>
@@ -197,7 +199,12 @@ export default function NewUserPage() {
           />
         </Field>
         <div className="flex gap-2 pt-2">
-          <Button type="button" variant="secondary" className="flex-1" onClick={() => router.back()}>
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-1"
+            onClick={() => router.back()}
+          >
             取消
           </Button>
           <Button type="submit" className="flex-1" disabled={saving}>
