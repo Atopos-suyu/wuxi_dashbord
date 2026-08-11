@@ -7,6 +7,7 @@ import {
   Bell,
   ClipboardList,
   FileSpreadsheet,
+  Filter,
   GraduationCap,
   Inbox,
   LayoutDashboard,
@@ -28,6 +29,7 @@ import { Button } from "@/components/ui/button";
 
 const NAV = [
   { href: "/overview", label: "总览", icon: LayoutDashboard, need: "region" as const },
+  { href: "/funnel", label: "漏斗", icon: Filter, need: "region" as const },
   { href: "/alerts", label: "预警", icon: Bell, need: "region" as const },
   { href: "/notifications", label: "通知", icon: Inbox, need: "region" as const },
   { href: "/goals", label: "目标", icon: Target, need: "region" as const },
@@ -95,6 +97,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <p className="mt-1 text-[11px] text-[var(--muted)]">
                 {profile?.full_name || "未登录"} ·{" "}
                 {profile ? ROLE_LABEL[profile.role] : "—"}
+                {profile?.school_region ? ` · ${profile.school_region}` : ""}
                 {profile?.area ? ` · ${profile.area}` : ""}
                 {isDemo ? " · 演示" : ""}
               </p>

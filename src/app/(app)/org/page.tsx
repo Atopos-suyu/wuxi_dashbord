@@ -9,9 +9,11 @@ import {
   MEMBER_STATUS_LABEL,
   ROLE_LABEL,
   ROLES,
+  SCHOOL_REGIONS,
   type Area,
   type MemberStatus,
   type Role,
+  type SchoolRegion,
 } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
 import { listProfiles, updateProfile } from "@/lib/data";
@@ -56,7 +58,7 @@ export default function OrgPage() {
       <div>
         <h1 className="section-title text-2xl md:text-3xl">组织管理</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          T3 调整角色、片区、上级与成员状态 · 共 {profiles.length} 人
+          T3 调整角色、校区、片区、上级与状态 · 共 {profiles.length} 人
         </p>
       </div>
 
@@ -71,7 +73,7 @@ export default function OrgPage() {
               />
               <span className="text-xs text-[var(--muted)]">{p.id.slice(0, 8)}</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
               <Select
                 value={String(valueOf(p, "role"))}
                 onChange={(e) => patch(p.id, { role: e.target.value as Role })}
@@ -79,6 +81,20 @@ export default function OrgPage() {
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
                     {ROLE_LABEL[r]}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={String(valueOf(p, "school_region") ?? "")}
+                onChange={(e) =>
+                  patch(p.id, {
+                    school_region: e.target.value as SchoolRegion,
+                  })
+                }
+              >
+                {SCHOOL_REGIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
                   </option>
                 ))}
               </Select>
@@ -106,7 +122,7 @@ export default function OrgPage() {
                   .filter((m) => m.id !== p.id)
                   .map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.full_name}（{ROLE_LABEL[m.role]}）
+                      {m.full_name}（{ROLE_LABEL[m.role]} · {m.school_region}）
                     </option>
                   ))}
               </Select>

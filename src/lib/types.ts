@@ -57,6 +57,7 @@ export interface CampusUser {
   area?: string | null;
   last_stage_update_at?: string | null;
   last_active_at?: string | null;
+  school_region?: string | null;
   created_at: string;
   updated_at: string;
   owner?: Profile | null;

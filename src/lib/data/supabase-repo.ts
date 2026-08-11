@@ -40,6 +40,7 @@ function mapUser(row: Record<string, unknown>): CampusUser {
     area: (row.area as string | null) ?? null,
     last_stage_update_at: (row.last_stage_update_at as string | null) ?? null,
     last_active_at: (row.last_active_at as string | null) ?? null,
+    school_region: (row.school_region as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     owner: owner ?? null,
@@ -95,6 +96,7 @@ export async function sbUpsertUser(
     "deal_amount",
     "remark",
     "area",
+    "school_region",
   ];
   for (const key of fields) {
     if (input[key] !== undefined) payload[key] = input[key];

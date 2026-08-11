@@ -43,6 +43,7 @@ interface SessionContextValue {
     full_name: string;
     role: Profile["role"];
     area?: string | null;
+    school_region?: string | null;
   }) => Promise<void>;
 }
 
@@ -113,10 +114,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     full_name: string;
     role: Profile["role"];
     area?: string | null;
+    school_region?: string | null;
   }) => {
     if (demo && profile) {
-      await updateProfileData(profile.id, data);
-      setProfile({ ...profile, ...data });
+      const patch: Partial<Profile> = {
+        full_name: data.full_name,
+        role: data.role,
+        area: data.area ?? null,
+        school_region: data.school_region || profile.school_region || "无锡学院",
+      };
+      await updateProfileData(profile.id, patch);
+      setProfile({ ...profile, ...patch });
       return;
     }
     const supabase = createClient();
@@ -126,7 +134,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     const { data: updated } = await supabase
       .from("profiles")
-      .update(data)
+      .update({
+        full_name: data.full_name,
+        role: data.role,
+        area: data.area ?? null,
+        school_region: data.school_region || "无锡学院",
+      })
       .eq("id", user.id)
       .select("*")
       .single();

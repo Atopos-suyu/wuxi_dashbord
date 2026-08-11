@@ -1,4 +1,5 @@
-import type { Profile, Role } from "@/lib/types";
+import type { Profile, Role, CampusUser } from "@/lib/types";
+import type { SchoolRegion } from "@/lib/constants";
 
 /** 片区总览 / 目标 / 预警：T3、T2 */
 export function canSeeRegionDashboard(role?: Role | null) {
@@ -20,6 +21,12 @@ export function canManageOrg(role?: Role | null) {
   return role === "T3";
 }
 
+/** T3 可跨校区；其他角色默认只看本校区 */
+export function sameCampus(a?: string | null, b?: string | null) {
+  if (!a || !b) return true;
+  return a === b;
+}
+
 export function canSeeMember(
   viewer: Profile,
   target: Profile,
@@ -27,6 +34,7 @@ export function canSeeMember(
 ): boolean {
   if (viewer.role === "T3") return true;
   if (viewer.id === target.id) return true;
+  if (!sameCampus(viewer.school_region, target.school_region)) return false;
   if (target.manager_id === viewer.id) return true;
   const mid = all.find((p) => p.id === target.manager_id);
   if (mid && mid.manager_id === viewer.id) return true;
@@ -47,4 +55,26 @@ export function visibleMembers(viewer: Profile, all: Profile[]) {
 
 export function visibleMemberIds(viewer: Profile, all: Profile[]) {
   return new Set(visibleMembers(viewer, all).map((p) => p.id));
+}
+
+/** 按校区过滤用户（T3 可选全部） */
+export function filterUsersByCampus(
+  users: CampusUser[],
+  campus: SchoolRegion | "all",
+  profiles: Profile[],
+) {
+  if (campus === "all") return users;
+  const ownerCampus = new Map(profiles.map((p) => [p.id, p.school_region]));
+  return users.filter((u) => {
+    if (u.school_region) return u.school_region === campus;
+    return ownerCampus.get(u.owner_id) === campus;
+  });
+}
+
+export function filterProfilesByCampus(
+  profiles: Profile[],
+  campus: SchoolRegion | "all",
+) {
+  if (campus === "all") return profiles;
+  return profiles.filter((p) => p.school_region === campus);
 }
