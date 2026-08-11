@@ -1,9 +1,18 @@
--- 无锡片区业务工作台 · 初始 Schema + RLS
--- 执行: supabase db push
+-- 无锡片区业务工作台 · 一键建表（可重复执行）
+-- 在 Supabase Dashboard → SQL Editor 中整段运行
 
 create extension if not exists "pgcrypto";
 
--- ========== helpers ==========
+-- ========== 先建 profiles，再创建依赖它的函数 ==========
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text not null default '',
+  role text not null default 'T2' check (role in ('T0', 'T1', 'T2', '伪T0')),
+  school_region text not null default '无锡学院',
+  status text not null default 'active' check (status in ('active', 'pending', 'inactive')),
+  created_at timestamptz not null default now()
+);
+
 create or replace function public.is_t0()
 returns boolean
 language sql
@@ -27,21 +36,18 @@ begin
 end;
 $$;
 
--- ========== profiles ==========
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text not null default '',
-  role text not null default 'T2' check (role in ('T0', 'T1', 'T2', '伪T0')),
-  school_region text not null default '无锡学院',
-  status text not null default 'active' check (status in ('active', 'pending', 'inactive')),
-  created_at timestamptz not null default now()
-);
-
 alter table public.profiles enable row level security;
 
-create policy "profiles_select_own_or_t0"
+drop policy if exists "profiles_select_own_or_t0" on public.profiles;
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+drop policy if exists "profiles_update_own_or_t0" on public.profiles;
+drop policy if exists "profiles_insert_own" on public.profiles;
+
+-- 已登录成员可读队友档案（展示负责人姓名）；仅本人或 T0 可改
+create policy "profiles_select_authenticated"
   on public.profiles for select
-  using (auth.uid() = id or public.is_t0());
+  to authenticated
+  using (true);
 
 create policy "profiles_update_own_or_t0"
   on public.profiles for update
@@ -51,7 +57,6 @@ create policy "profiles_insert_own"
   on public.profiles for insert
   with check (auth.uid() = id);
 
--- auto create profile on signup
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -75,7 +80,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- ========== users (新生) ==========
+-- ========== users（新生） ==========
 create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -114,7 +119,6 @@ create trigger users_set_updated_at
   before update on public.users
   for each row execute function public.set_updated_at();
 
--- auto calc level from six_dim_score
 create or replace function public.calc_user_level(score jsonb)
 returns text
 language plpgsql
@@ -162,6 +166,11 @@ create trigger users_auto_level_trg
 
 alter table public.users enable row level security;
 
+drop policy if exists "users_select_own_or_t0" on public.users;
+drop policy if exists "users_insert_own_or_t0" on public.users;
+drop policy if exists "users_update_own_or_t0" on public.users;
+drop policy if exists "users_delete_own_or_t0" on public.users;
+
 create policy "users_select_own_or_t0"
   on public.users for select
   using (owner_id = auth.uid() or public.is_t0());
@@ -194,6 +203,11 @@ create index if not exists stage_logs_user_idx on public.user_stage_logs(user_id
 create index if not exists stage_logs_owner_idx on public.user_stage_logs(owner_id);
 
 alter table public.user_stage_logs enable row level security;
+
+drop policy if exists "stage_logs_select" on public.user_stage_logs;
+drop policy if exists "stage_logs_insert" on public.user_stage_logs;
+drop policy if exists "stage_logs_update" on public.user_stage_logs;
+drop policy if exists "stage_logs_delete" on public.user_stage_logs;
 
 create policy "stage_logs_select"
   on public.user_stage_logs for select
@@ -238,6 +252,9 @@ create table if not exists public.team_capabilities (
 
 alter table public.team_capabilities enable row level security;
 
+drop policy if exists "capabilities_select" on public.team_capabilities;
+drop policy if exists "capabilities_write_t0" on public.team_capabilities;
+
 create policy "capabilities_select"
   on public.team_capabilities for select
   using (member_id = auth.uid() or public.is_t0());
@@ -267,6 +284,10 @@ create table if not exists public.daily_reviews (
 
 alter table public.daily_reviews enable row level security;
 
+drop policy if exists "daily_select" on public.daily_reviews;
+drop policy if exists "daily_insert_own" on public.daily_reviews;
+drop policy if exists "daily_update_own" on public.daily_reviews;
+
 create policy "daily_select"
   on public.daily_reviews for select
   using (member_id = auth.uid() or public.is_t0());
@@ -294,6 +315,10 @@ create table if not exists public.weekly_reviews (
 
 alter table public.weekly_reviews enable row level security;
 
+drop policy if exists "weekly_select" on public.weekly_reviews;
+drop policy if exists "weekly_insert_own" on public.weekly_reviews;
+drop policy if exists "weekly_update_own" on public.weekly_reviews;
+
 create policy "weekly_select"
   on public.weekly_reviews for select
   using (member_id = auth.uid() or public.is_t0());
@@ -310,6 +335,10 @@ create policy "weekly_update_own"
 insert into storage.buckets (id, name, public)
 values ('recordings', 'recordings', false)
 on conflict (id) do nothing;
+
+drop policy if exists "recordings_read_own_or_t0" on storage.objects;
+drop policy if exists "recordings_insert_own" on storage.objects;
+drop policy if exists "recordings_delete_own_or_t0" on storage.objects;
 
 create policy "recordings_read_own_or_t0"
   on storage.objects for select
@@ -337,12 +366,3 @@ create policy "recordings_delete_own_or_t0"
       or (storage.foldername(name))[1] = auth.uid()::text
     )
   );
--- 允许同片区已登录成员读取队友基础档案（用于负责人姓名展示）
--- T0 仍可改全部；普通成员仅可读他人，不可改他人
-
-drop policy if exists "profiles_select_own_or_t0" on public.profiles;
-
-create policy "profiles_select_authenticated"
-  on public.profiles for select
-  to authenticated
-  using (true);
