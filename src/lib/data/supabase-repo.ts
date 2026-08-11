@@ -596,3 +596,20 @@ export async function sbAddStudentActivity(
   if (error) throw error;
   return data as import("@/lib/types").StudentActivity;
 }
+
+/** Live：读取后端口径预警视图（需已执行 20260811000009_alert_views.sql） */
+export async function sbListComputedAlerts() {
+  const { data, error } = await sb().from("v_computed_alerts").select("*");
+  if (error) throw error;
+  return (data ?? []) as Array<{
+    alert_key: string;
+    alert_type: string;
+    level: "red" | "yellow";
+    member_id: string;
+    member_name: string | null;
+    user_id: string | null;
+    user_name: string | null;
+    contact: string | null;
+    reason: string;
+  }>;
+}
