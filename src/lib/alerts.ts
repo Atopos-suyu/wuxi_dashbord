@@ -67,7 +67,11 @@ function worsenedFromSupport(log: ParentAttitudeLog) {
   );
 }
 
-/** 动态计算预警（不落库），再与已处理记录合并。口径集中于此，页面只展示。 */
+/**
+ * 动态计算预警（不落库），再与已处理记录合并。
+ * 演示模式与 cron 走此函数；Live 侧镜像见 `v_computed_alerts`
+ *（supabase/migrations/20260811000009_alert_views.sql），阈值对齐 ALERT_THRESHOLDS。
+ */
 export function computeAlerts(input: {
   members: Profile[];
   users: CampusUser[];

@@ -68,9 +68,26 @@ supabase/migrations/20260811000003_v2_roles_goals_alerts.sql
 - V2.3：`20260811000006_campus_funnel.sql`（双校区约束 + can_see_member 同校区）
 - V2.4：`20260811000007_qa_wecom.sql`（录音质检字段 + 企微推送去重）
 - V2.5：`20260811000008_loss_cron.sql`（流失原因）
+- V2-5 走查：`20260811000009_alert_views.sql`（`v_computed_alerts` 后端口径）
 - 或一键执行 `supabase/setup_all.sql`
 
 定时推送环境变量：`WECOM_BOT_WEBHOOK_URL`、`CRON_SECRET`、可选 `SUPABASE_SERVICE_ROLE_KEY`。
+
+## V2-5 验收清单
+
+| 项 | 状态 |
+|---|---|
+| T3 可见总览 / 漏斗 / 红绿灯 / 预警 / 目标 | ✅ 导航 + 路由守卫 |
+| T2 仅本专业片区 + 本校区 | ✅ `can_see_member` + 单测 |
+| T1 仅组内 T0 | ✅ 单测 |
+| T0 仅自己用户、无全局报表入口 | ✅ `isExecutor` + 导航过滤 |
+| 红绿灯（漏填 / 逾期 / 能力下滑 / inactive） | ✅ `memberTrafficLight` + 单测 |
+| 预警四类 + 闭环（跟进 / 已处理） | ✅ `alerts.test.ts` |
+| 目标实际值对齐用户表 | ✅ `computeGoalActuals` |
+| 预警后端口径视图 | ✅ `v_computed_alerts` |
+| CSV 导出 | ✅ 总览 / 预警 / 目标 / 会包 |
+
+本地走查：演示模式分别以 T3 / T2（计科）/ T1 / T0 登录，对照上表；运行 `npm test`。
 
 ## 脚本
 
@@ -79,4 +96,5 @@ npm run dev      # 开发
 npm run build    # 生产构建
 npm run start    # 启动生产服务
 npm run lint     # ESLint
+npm run test     # 等级 / 权限 / 预警闭环单测
 ```
