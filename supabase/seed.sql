@@ -1,0 +1,14 @@
+-- 演示数据说明：
+-- Supabase Auth 用户需先在 Dashboard 或 Auth Admin API 创建，再把 UUID 填入下方。
+-- 或使用应用内「演示模式」直接体验，无需真实 Auth。
+--
+-- 建议演示账号（自行注册后把 id 替换）：
+-- T0: t0@wuxi.demo / demo123456
+-- T1: t1a@wuxi.demo / demo123456
+-- T1: t1b@wuxi.demo / demo123456
+
+-- 以下为 profiles / users 示例（请替换 UUID）
+-- insert into profiles (id, full_name, role, school_region, status) values
+--   ('00000000-0000-0000-0000-000000000001', '陈负责人', 'T0', '无锡学院', 'active'),
+--   ('00000000-0000-0000-0000-000000000002', '林组长', 'T1', '无锡学院', 'active'),
+--   ('00000000-0000-0000-0000-000000000003', '王成员', 'T1', '无锡学院', 'pending');
