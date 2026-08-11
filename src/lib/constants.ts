@@ -165,6 +165,18 @@ export const QA_STATUS_LABEL: Record<QaStatus, string> = {
   rejected: "需复盘",
 };
 
+/** 流失原因标签 */
+export const LOSS_REASONS = [
+  "价格敏感",
+  "家长反对",
+  "竞品截流",
+  "时间冲突",
+  "意向不足",
+  "失联",
+  "其他",
+] as const;
+export type LossReason = (typeof LOSS_REASONS)[number];
+
 export const GOAL_METRICS = ["招新群", "面试", "A类", "成交"] as const;
 export type GoalMetric = (typeof GOAL_METRICS)[number];
 

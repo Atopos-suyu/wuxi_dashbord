@@ -213,6 +213,38 @@ export default function FunnelPage() {
 
       <section className="panel overflow-hidden">
         <div className="border-b border-[var(--line)]/70 px-4 py-3 font-semibold">
+          流失原因分布
+        </div>
+        {conv.lossByReason.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-[var(--muted)]">当前筛选下无流失用户</p>
+        ) : (
+          <div className="space-y-3 p-4">
+            {conv.lossByReason.map((r) => {
+              const pct =
+                conv.lost > 0 ? Math.round((r.count / conv.lost) * 100) : 0;
+              return (
+                <div key={r.reason}>
+                  <div className="mb-1 flex justify-between text-sm">
+                    <span>{r.reason}</span>
+                    <span className="tabular-nums text-[var(--muted)]">
+                      {r.count} · {pct}%
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-2)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--ink-soft)]"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="panel overflow-hidden">
+        <div className="border-b border-[var(--line)]/70 px-4 py-3 font-semibold">
           校区对比
         </div>
         <div className="overflow-x-auto">

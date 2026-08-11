@@ -387,6 +387,7 @@ export const DEMO_USERS: CampusUser[] = [
     next_action_due: null,
     deal_amount: null,
     remark: "诊断用流失样本",
+    loss_reason: "家长反对",
   }),
 ];
 

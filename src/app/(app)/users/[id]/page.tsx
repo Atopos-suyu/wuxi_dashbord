@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  LOSS_REASONS,
   PARENT_ATTITUDES,
   SIX_DIM_KEYS,
   STAGE_LOG_STATUSES,
   STAGES,
   STAGES_REQUIRE_RECORDING,
+  type LossReason,
   type SixDimScore,
   type Stage,
   type StageLogStatus,
@@ -62,13 +64,15 @@ export default function UserDetailPage() {
   const [recordUrl, setRecordUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [lossReason, setLossReason] = useState<LossReason | "">("");
 
   useEffect(() => {
     if (user) {
       const idx = Math.min(STAGES.indexOf(user.stage) + 1, STAGES.length - 1);
       setNextStage(STAGES[idx]);
+      setLossReason((user.loss_reason as LossReason) || "");
     }
-  }, [user?.id, user?.stage]);
+  }, [user?.id, user?.stage, user?.loss_reason]);
 
   const score = six ?? user?.six_dim_score ?? null;
   const liveLevel = score ? calcLevel(normalizeSixDim(score)) : "B";
@@ -215,6 +219,22 @@ export default function UserDetailPage() {
             placeholder="聊了什么、结果如何…"
           />
         </div>
+        {nextStage === "流失" ? (
+          <div className="space-y-2">
+            <Label>流失原因（必选）</Label>
+            <Select
+              value={lossReason}
+              onChange={(e) => setLossReason(e.target.value as LossReason)}
+            >
+              <option value="">请选择</option>
+              {LOSS_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label>
             上传录音（手机可录）
@@ -261,10 +281,14 @@ export default function UserDetailPage() {
           className="w-full"
           disabled={
             uploading ||
-            (stageRequiresRecording(nextStage) && !recordUrl)
+            (stageRequiresRecording(nextStage) && !recordUrl) ||
+            (nextStage === "流失" && !lossReason)
           }
           onClick={async () => {
             try {
+              if (nextStage === "流失" && !lossReason) {
+                throw new Error("请选择流失原因");
+              }
               await addStageLog({
                 user_id: user.id,
                 stage: nextStage,
@@ -274,6 +298,15 @@ export default function UserDetailPage() {
                 owner_id: profile.id,
                 advanceUser: status !== "failed",
               });
+              if (status !== "failed" && nextStage === "流失") {
+                await upsertUser({
+                  id: user.id,
+                  name: user.name,
+                  owner_id: user.owner_id,
+                  stage: "流失",
+                  loss_reason: lossReason,
+                });
+              }
               setNote("");
               setRecordUrl(null);
               setPreviewUrl(null);
@@ -291,6 +324,33 @@ export default function UserDetailPage() {
 
       <section className="panel space-y-3 p-4">
         <h2 className="font-semibold">跟进信息</h2>
+        {user.stage === "流失" ? (
+          <div className="space-y-2">
+            <Label>流失原因</Label>
+            <Select
+              value={lossReason || user.loss_reason || ""}
+              onChange={async (e) => {
+                const value = e.target.value as LossReason;
+                setLossReason(value);
+                await upsertUser({
+                  id: user.id,
+                  name: user.name,
+                  owner_id: user.owner_id,
+                  loss_reason: value,
+                });
+                reload();
+                toast.success("流失原因已更新");
+              }}
+            >
+              <option value="">未标注</option>
+              {LOSS_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="家长态度">
             <Select

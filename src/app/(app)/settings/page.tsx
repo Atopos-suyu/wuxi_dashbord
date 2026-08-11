@@ -49,7 +49,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="section-title text-2xl md:text-3xl">设置</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          企微推送 · 录音质检规则
+          企微推送 · 定时任务 · 录音质检规则
         </p>
       </div>
 
@@ -125,11 +125,40 @@ export default function SettingsPage() {
       </section>
 
       <section className="panel space-y-2 p-4">
+        <h2 className="font-semibold">定时日报推送</h2>
+        <p className="text-sm text-[var(--muted)]">
+          已提供 Cron 接口{" "}
+          <code className="rounded bg-[var(--surface-2)] px-1">
+            GET /api/cron/wecom-daily
+          </code>
+          （默认每天 01:00 UTC，见 <code className="rounded bg-[var(--surface-2)] px-1">vercel.json</code>）。
+          需配置{" "}
+          <code className="rounded bg-[var(--surface-2)] px-1">CRON_SECRET</code>
+          ，请求头{" "}
+          <code className="rounded bg-[var(--surface-2)] px-1">
+            Authorization: Bearer &lt;CRON_SECRET&gt;
+          </code>
+          。完整预警明细还需{" "}
+          <code className="rounded bg-[var(--surface-2)] px-1">
+            SUPABASE_SERVICE_ROLE_KEY
+          </code>
+          。
+        </p>
+      </section>
+
+      <section className="panel space-y-2 p-4">
         <h2 className="font-semibold">录音质检规则</h2>
         <p className="text-sm text-[var(--muted)]">
           推进到{" "}
           <strong>{STAGES_REQUIRE_RECORDING.join("、")}</strong>{" "}
           时必须上传录音，否则无法提交。T1/T2/T3 可在「质检」页抽听并标记合格/需复盘。
+        </p>
+      </section>
+
+      <section className="panel space-y-2 p-4">
+        <h2 className="font-semibold">流失原因</h2>
+        <p className="text-sm text-[var(--muted)]">
+          用户推进到「流失」时必须选择原因标签；漏斗诊断页可查看原因分布。
         </p>
       </section>
     </div>
