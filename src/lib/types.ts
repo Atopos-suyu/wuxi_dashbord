@@ -1,22 +1,28 @@
 import type {
   CapabilityScores,
+  GoalMetric,
   Level,
   MemberStatus,
   Role,
   SixDimScore,
   Stage,
   StageLogStatus,
+  TrafficLight,
+  AlertType,
 } from "./constants";
 import { PARENT_ATTITUDES } from "./constants";
 
 export type {
   CapabilityScores,
+  GoalMetric,
   Level,
   MemberStatus,
   Role,
   SixDimScore,
   Stage,
   StageLogStatus,
+  TrafficLight,
+  AlertType,
 };
 
 export type ParentAttitude = (typeof PARENT_ATTITUDES)[number];
@@ -27,6 +33,8 @@ export interface Profile {
   role: Role;
   school_region: string;
   status: MemberStatus;
+  area?: string | null;
+  manager_id?: string | null;
   created_at: string;
 }
 
@@ -46,6 +54,8 @@ export interface CampusUser {
   next_action_due: string | null;
   deal_amount: number | null;
   remark: string;
+  area?: string | null;
+  last_stage_update_at?: string | null;
   created_at: string;
   updated_at: string;
   owner?: Profile | null;
@@ -61,7 +71,7 @@ export interface UserStageLog {
   owner_id: string;
   created_at: string;
   owner?: Profile | null;
-  user?: Pick<CampusUser, "id" | "name"> | null;
+  user?: Pick<CampusUser, "id" | "name" | "contact"> | null;
 }
 
 export interface TeamCapability {
@@ -101,4 +111,38 @@ export interface WeeklyReview {
   plan_next: string;
   created_at: string;
   member?: Profile | null;
+}
+
+export interface Goal {
+  id: string;
+  member_id: string | null;
+  period: string;
+  metric: GoalMetric;
+  target_value: number;
+  created_at: string;
+}
+
+export interface AlertResolution {
+  id: string;
+  alert_key: string;
+  member_id: string;
+  user_id: string | null;
+  alert_type: AlertType | string;
+  level: "red" | "yellow";
+  note: string;
+  handled_by: string;
+  created_at: string;
+}
+
+export interface ComputedAlert {
+  alert_key: string;
+  alert_type: AlertType;
+  level: "red" | "yellow";
+  member_id: string;
+  member_name: string;
+  user_id?: string | null;
+  user_name?: string | null;
+  contact?: string | null;
+  reason: string;
+  resolved?: boolean;
 }

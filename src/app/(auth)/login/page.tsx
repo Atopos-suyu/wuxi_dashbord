@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, ROLE_LABEL } from "@/lib/constants";
 import { isDemoMode } from "@/lib/mode";
 import { DEMO_PROFILES } from "@/lib/demo/seed-data";
+import { canSeeRegionDashboard } from "@/lib/permissions";
 import { useSession } from "@/components/providers/session-provider";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -31,8 +32,20 @@ export default function LoginPage() {
         password,
       });
       if (error) throw error;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      let next = "/users";
+      if (user) {
+        const { data: me } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (me && canSeeRegionDashboard(me.role)) next = "/overview";
+      }
       toast.success("登录成功");
-      router.replace("/users");
+      router.replace(next);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "登录失败");
     } finally {
@@ -50,7 +63,7 @@ export default function LoginPage() {
       <div className="panel relative z-10 p-6 animate-fade-up">
         <p className="section-title text-3xl text-[var(--ink)]">{APP_NAME}</p>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          团队多人协作 · 手机也能录数据 · T0 看全局
+          V2 监控闭环 · T3 看全盘 · 成员红绿灯 · 预警中心
         </p>
 
         {demo ? (
@@ -66,22 +79,21 @@ export default function LoginPage() {
                 onClick={() => {
                   loginDemo(p.id);
                   toast.success(`已进入：${p.full_name}`);
-                  router.replace(p.role === "T0" ? "/dashboard" : "/users");
+                  router.replace(
+                    canSeeRegionDashboard(p.role) ? "/overview" : "/users",
+                  );
                 }}
               >
                 <span>
                   <span className="block font-medium">{p.full_name}</span>
                   <span className="text-xs text-[var(--muted)]">
-                    {p.role} · {p.school_region}
+                    {ROLE_LABEL[p.role]}
+                    {p.area ? ` · ${p.area}` : ""}
                   </span>
                 </span>
                 <span className="text-xs text-[var(--accent)]">进入</span>
               </button>
             ))}
-            <p className="pt-2 text-xs leading-relaxed text-[var(--muted)]">
-              配置 <code>NEXT_PUBLIC_SUPABASE_URL</code> 与{" "}
-              <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> 后即可切换真实登录。
-            </p>
           </div>
         ) : (
           <form className="mt-8 space-y-4" onSubmit={onSubmit}>
@@ -93,7 +105,6 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
               />
             </div>
             <div className="space-y-2">
@@ -104,7 +115,6 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="至少 6 位"
               />
             </div>
             <Button className="w-full" disabled={loading} type="submit">

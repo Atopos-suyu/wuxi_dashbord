@@ -19,7 +19,7 @@ import { LoadingBlock } from "@/components/ui/loading";
 import { currentWeekPeriod, downloadCsv, weekStartISO } from "@/lib/utils";
 
 export default function WeeklyReviewPage() {
-  const { profile, isT0 } = useSession();
+  const { profile, canSeeMembers } = useSession();
   const weekStart = weekStartISO();
   const weekPeriod = currentWeekPeriod();
 
@@ -37,8 +37,8 @@ export default function WeeklyReviewPage() {
     loading: weeklyLoading,
     reload,
   } = useLiveQuery(
-    () => listWeeklyReviews(isT0 ? undefined : profile?.id),
-    [profile?.id, isT0],
+    () => listWeeklyReviews(canSeeMembers ? undefined : profile?.id),
+    [profile?.id, canSeeMembers],
   );
 
   const funnelSnapshot = useMemo(() => {
@@ -82,7 +82,7 @@ export default function WeeklyReviewPage() {
             周起始 {weekStart} · 自动带出漏斗与能力快照
           </p>
         </div>
-        {isT0 ? (
+        {canSeeMembers ? (
           <Button
             variant="secondary"
             size="sm"
@@ -162,7 +162,7 @@ export default function WeeklyReviewPage() {
           </p>
         ) : (
           <p className="text-xs text-[var(--muted)]">
-            本周尚无能力评分，T0 可在成员详情补录
+            本周尚无能力评分，上级可在成员详情补录
           </p>
         )}
         <Button className="w-full" type="submit">
@@ -170,7 +170,7 @@ export default function WeeklyReviewPage() {
         </Button>
       </form>
 
-      {isT0 ? (
+      {canSeeMembers ? (
         <section className="space-y-3">
           <h2 className="font-semibold">周报总览</h2>
           {allWeekly.map((w) => {

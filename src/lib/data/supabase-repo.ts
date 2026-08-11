@@ -37,6 +37,8 @@ function mapUser(row: Record<string, unknown>): CampusUser {
         ? null
         : Number(row.deal_amount),
     remark: String(row.remark ?? ""),
+    area: (row.area as string | null) ?? null,
+    last_stage_update_at: (row.last_stage_update_at as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     owner: owner ?? null,
@@ -52,15 +54,12 @@ export async function sbListProfiles(): Promise<Profile[]> {
   return (data ?? []) as Profile[];
 }
 
-export async function sbListUsersFor(profile: Profile): Promise<CampusUser[]> {
-  let query = sb()
+export async function sbListUsersFor(_profile: Profile): Promise<CampusUser[]> {
+  // 可见范围由 RLS can_see_member(owner_id) 控制
+  const { data, error } = await sb()
     .from("users")
     .select("*, owner:profiles!owner_id(*)")
     .order("updated_at", { ascending: false });
-  if (profile.role !== "T0") {
-    query = query.eq("owner_id", profile.id);
-  }
-  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map((row) => mapUser(row as Record<string, unknown>));
 }
@@ -123,20 +122,19 @@ export async function sbUpsertUser(
 
 export async function sbListStageLogs(
   userId?: string,
-  profile?: Profile,
+  _profile?: Profile,
 ): Promise<UserStageLog[]> {
+  // 可见范围由 RLS can_see_member(owner_id) 控制
   let query = sb()
     .from("user_stage_logs")
-    .select("*, owner:profiles!owner_id(*), user:users(id, name)")
+    .select("*, owner:profiles!owner_id(*), user:users(id, name, contact)")
     .order("created_at", { ascending: false });
   if (userId) query = query.eq("user_id", userId);
-  if (profile && profile.role !== "T0") {
-    query = query.eq("owner_id", profile.id);
-  }
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map((row) => {
     const r = row as Record<string, unknown>;
+    const user = r.user as { id: string; name: string; contact?: string } | null;
     return {
       id: String(r.id),
       user_id: String(r.user_id),
@@ -147,7 +145,9 @@ export async function sbListStageLogs(
       owner_id: String(r.owner_id),
       created_at: String(r.created_at),
       owner: (r.owner as Profile | null) ?? null,
-      user: (r.user as { id: string; name: string } | null) ?? null,
+      user: user
+        ? { id: user.id, name: user.name, contact: user.contact ?? "" }
+        : null,
     };
   });
 }
@@ -314,6 +314,63 @@ export async function sbUpsertWeekly(
       plan_next: input.plan_next,
     },
     { onConflict: "member_id,week_start" },
+  );
+  if (error) throw error;
+}
+
+export async function sbListGoals(period?: string) {
+  let query = sb().from("goals").select("*").order("created_at", { ascending: true });
+  if (period) query = query.eq("period", period);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as import("@/lib/types").Goal[];
+}
+
+export async function sbUpsertGoal(
+  input: Omit<import("@/lib/types").Goal, "id" | "created_at"> & { id?: string },
+) {
+  if (input.id) {
+    const { error } = await sb().from("goals").update({
+      member_id: input.member_id,
+      period: input.period,
+      metric: input.metric,
+      target_value: input.target_value,
+    }).eq("id", input.id);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await sb().from("goals").insert({
+    member_id: input.member_id,
+    period: input.period,
+    metric: input.metric,
+    target_value: input.target_value,
+  });
+  if (error) throw error;
+}
+
+export async function sbListResolutions() {
+  const { data, error } = await sb()
+    .from("alert_resolutions")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as import("@/lib/types").AlertResolution[];
+}
+
+export async function sbResolveAlert(
+  input: Omit<import("@/lib/types").AlertResolution, "id" | "created_at">,
+) {
+  const { error } = await sb().from("alert_resolutions").upsert(
+    {
+      alert_key: input.alert_key,
+      member_id: input.member_id,
+      user_id: input.user_id,
+      alert_type: input.alert_type,
+      level: input.level,
+      note: input.note,
+      handled_by: input.handled_by,
+    },
+    { onConflict: "alert_key" },
   );
   if (error) throw error;
 }

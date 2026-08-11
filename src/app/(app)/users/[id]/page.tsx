@@ -13,10 +13,12 @@ import {
   type StageLogStatus,
 } from "@/lib/constants";
 import { calcLevel, normalizeSixDim } from "@/lib/level";
+import { canSeeMember } from "@/lib/permissions";
 import { useSession } from "@/components/providers/session-provider";
 import {
   addStageLog,
   getUser,
+  listProfiles,
   listStageLogs,
   uploadRecording,
   upsertUser,
@@ -48,6 +50,7 @@ export default function UserDetailPage() {
     () => listStageLogs(params.id),
     [params.id],
   );
+  const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
 
   const [six, setSix] = useState<SixDimScore | null>(null);
   const [note, setNote] = useState("");
@@ -92,7 +95,11 @@ export default function UserDetailPage() {
     );
   }
 
-  if (profile.role !== "T0" && user.owner_id !== profile.id) {
+  const owner = profiles.find((p) => p.id === user.owner_id) ?? user.owner;
+  if (
+    user.owner_id !== profile.id &&
+    (!owner || !canSeeMember(profile, owner, profiles))
+  ) {
     return <EmptyState title="无权查看该用户" />;
   }
 

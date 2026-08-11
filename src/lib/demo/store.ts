@@ -3,15 +3,20 @@
 import {
   DEMO_CAPABILITIES,
   DEMO_DAILY,
+  DEMO_GOALS,
   DEMO_PROFILES,
+  DEMO_RESOLUTIONS,
   DEMO_STAGE_LOGS,
   DEMO_USERS,
   DEMO_WEEKLY,
 } from "@/lib/demo/seed-data";
 import { calcLevel, normalizeSixDim } from "@/lib/level";
+import { visibleMemberIds } from "@/lib/permissions";
 import type {
+  AlertResolution,
   CampusUser,
   DailyReview,
+  Goal,
   Profile,
   TeamCapability,
   UserStageLog,
@@ -19,7 +24,7 @@ import type {
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
-const STORAGE_KEY = "wxu_demo_db_v1";
+const STORAGE_KEY = "wxu_demo_db_v2";
 
 export interface DemoDB {
   profiles: Profile[];
@@ -28,6 +33,8 @@ export interface DemoDB {
   capabilities: TeamCapability[];
   dailyReviews: DailyReview[];
   weeklyReviews: WeeklyReview[];
+  goals: Goal[];
+  resolutions: AlertResolution[];
 }
 
 function seed(): DemoDB {
@@ -38,6 +45,8 @@ function seed(): DemoDB {
     capabilities: structuredClone(DEMO_CAPABILITIES),
     dailyReviews: structuredClone(DEMO_DAILY),
     weeklyReviews: structuredClone(DEMO_WEEKLY),
+    goals: structuredClone(DEMO_GOALS),
+    resolutions: structuredClone(DEMO_RESOLUTIONS),
   };
 }
 
@@ -50,7 +59,10 @@ export function loadDemoDB(): DemoDB {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
       return db;
     }
-    return JSON.parse(raw) as DemoDB;
+    const parsed = JSON.parse(raw) as DemoDB;
+    if (!parsed.goals) parsed.goals = structuredClone(DEMO_GOALS);
+    if (!parsed.resolutions) parsed.resolutions = [];
+    return parsed;
   } catch {
     return seed();
   }
@@ -85,24 +97,10 @@ export function clearDemoSession() {
   document.cookie = "wxu_demo_user=; path=/; max-age=0";
 }
 
-export function withOwner<T extends { owner_id?: string; member_id?: string }>(
-  items: T[],
-  profiles: Profile[],
-  key: "owner_id" | "member_id" = "owner_id",
-) {
-  return items.map((item) => ({
-    ...item,
-    owner: key === "owner_id" ? profiles.find((p) => p.id === item.owner_id) ?? null : undefined,
-    member: key === "member_id" ? profiles.find((p) => p.id === item.member_id) ?? null : undefined,
-  }));
-}
-
 export function listUsersFor(profile: Profile) {
   const db = loadDemoDB();
-  const users =
-    profile.role === "T0"
-      ? db.users
-      : db.users.filter((u) => u.owner_id === profile.id);
+  const ids = visibleMemberIds(profile, db.profiles);
+  const users = db.users.filter((u) => ids.has(u.owner_id));
   return users
     .map((u) => ({
       ...u,
@@ -126,16 +124,22 @@ export function upsertUser(
 ) {
   const db = loadDemoDB();
   const now = new Date().toISOString();
+  const owner = db.profiles.find((p) => p.id === input.owner_id);
   if (input.id) {
     db.users = db.users.map((u) => {
       if (u.id !== input.id) return u;
       const six = normalizeSixDim(input.six_dim_score ?? u.six_dim_score);
+      const stageChanged = input.stage && input.stage !== u.stage;
       return {
         ...u,
         ...input,
+        area: input.area ?? u.area ?? owner?.area ?? null,
         six_dim_score: six,
         level: calcLevel(six),
         updated_at: now,
+        last_stage_update_at: stageChanged
+          ? now
+          : (input.last_stage_update_at ?? u.last_stage_update_at),
       };
     });
   } else {
@@ -147,6 +151,7 @@ export function upsertUser(
       contact: input.contact ?? "",
       channel: input.channel ?? "",
       owner_id: input.owner_id,
+      area: input.area ?? owner?.area ?? null,
       stage: input.stage ?? "建联",
       six_dim_score: six,
       level: calcLevel(six),
@@ -158,13 +163,16 @@ export function upsertUser(
       remark: input.remark ?? "",
       created_at: now,
       updated_at: now,
+      last_stage_update_at: now,
     });
   }
   saveDemoDB(db);
   return getUser(input.id ?? db.users[0].id);
 }
 
-export function addStageLog(input: Omit<UserStageLog, "id" | "created_at"> & { advanceUser?: boolean }) {
+export function addStageLog(
+  input: Omit<UserStageLog, "id" | "created_at"> & { advanceUser?: boolean },
+) {
   const db = loadDemoDB();
   const log: UserStageLog = {
     ...input,
@@ -175,7 +183,12 @@ export function addStageLog(input: Omit<UserStageLog, "id" | "created_at"> & { a
   if (input.advanceUser) {
     db.users = db.users.map((u) =>
       u.id === input.user_id
-        ? { ...u, stage: input.stage, updated_at: log.created_at }
+        ? {
+            ...u,
+            stage: input.stage,
+            updated_at: log.created_at,
+            last_stage_update_at: log.created_at,
+          }
         : u,
     );
   }
@@ -187,17 +200,21 @@ export function listStageLogs(userId?: string, profile?: Profile) {
   const db = loadDemoDB();
   let logs = db.stageLogs;
   if (userId) logs = logs.filter((l) => l.user_id === userId);
-  if (profile && profile.role !== "T0") {
-    logs = logs.filter((l) => l.owner_id === profile.id);
+  if (profile) {
+    const ids = visibleMemberIds(profile, db.profiles);
+    logs = logs.filter((l) => ids.has(l.owner_id));
   }
   return logs
-    .map((l) => ({
-      ...l,
-      owner: db.profiles.find((p) => p.id === l.owner_id) ?? null,
-      user: db.users.find((u) => u.id === l.user_id)
-        ? { id: l.user_id, name: db.users.find((u) => u.id === l.user_id)!.name }
-        : null,
-    }))
+    .map((l) => {
+      const user = db.users.find((u) => u.id === l.user_id);
+      return {
+        ...l,
+        owner: db.profiles.find((p) => p.id === l.owner_id) ?? null,
+        user: user
+          ? { id: user.id, name: user.name, contact: user.contact }
+          : null,
+      };
+    })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
@@ -205,7 +222,9 @@ export function listRecordings(profile: Profile) {
   return listStageLogs(undefined, profile).filter((l) => !!l.record_url);
 }
 
-export function upsertCapability(input: Omit<TeamCapability, "id" | "created_at"> & { id?: string }) {
+export function upsertCapability(
+  input: Omit<TeamCapability, "id" | "created_at"> & { id?: string },
+) {
   const db = loadDemoDB();
   const existing = db.capabilities.find(
     (c) => c.member_id === input.member_id && c.period === input.period,
@@ -229,10 +248,13 @@ export function upsertCapability(input: Omit<TeamCapability, "id" | "created_at"
   saveDemoDB(db);
 }
 
-export function upsertDaily(input: Omit<DailyReview, "id" | "created_at"> & { id?: string }) {
+export function upsertDaily(
+  input: Omit<DailyReview, "id" | "created_at"> & { id?: string },
+) {
   const db = loadDemoDB();
   const existing = db.dailyReviews.find(
-    (d) => d.member_id === input.member_id && d.review_date === input.review_date,
+    (d) =>
+      d.member_id === input.member_id && d.review_date === input.review_date,
   );
   if (existing) {
     db.dailyReviews = db.dailyReviews.map((d) =>
@@ -248,7 +270,9 @@ export function upsertDaily(input: Omit<DailyReview, "id" | "created_at"> & { id
   saveDemoDB(db);
 }
 
-export function upsertWeekly(input: Omit<WeeklyReview, "id" | "created_at"> & { id?: string }) {
+export function upsertWeekly(
+  input: Omit<WeeklyReview, "id" | "created_at"> & { id?: string },
+) {
   const db = loadDemoDB();
   const existing = db.weeklyReviews.find(
     (w) => w.member_id === input.member_id && w.week_start === input.week_start,
@@ -270,5 +294,76 @@ export function upsertWeekly(input: Omit<WeeklyReview, "id" | "created_at"> & { 
 export function updateProfile(id: string, patch: Partial<Profile>) {
   const db = loadDemoDB();
   db.profiles = db.profiles.map((p) => (p.id === id ? { ...p, ...patch } : p));
+  saveDemoDB(db);
+}
+
+export function createDemoProfile(input: {
+  full_name: string;
+  role: Profile["role"];
+  area?: string | null;
+  manager_id?: string | null;
+}): Profile {
+  const db = loadDemoDB();
+  const profile: Profile = {
+    id: uid("profile"),
+    full_name: input.full_name,
+    role: input.role,
+    school_region: "无锡学院",
+    status: "active",
+    area: input.area ?? null,
+    manager_id: input.manager_id ?? null,
+    created_at: new Date().toISOString(),
+  };
+  db.profiles.push(profile);
+  saveDemoDB(db);
+  return profile;
+}
+
+export function listGoals(period?: string) {
+  const db = loadDemoDB();
+  return period
+    ? db.goals.filter((g) => g.period === period)
+    : db.goals;
+}
+
+export function upsertGoal(
+  input: Omit<Goal, "id" | "created_at"> & { id?: string },
+) {
+  const db = loadDemoDB();
+  const existing = db.goals.find(
+    (g) =>
+      g.period === input.period &&
+      g.metric === input.metric &&
+      (g.member_id ?? null) === (input.member_id ?? null),
+  );
+  if (existing || input.id) {
+    const id = input.id ?? existing!.id;
+    db.goals = db.goals.map((g) =>
+      g.id === id ? { ...g, ...input, id } : g,
+    );
+  } else {
+    db.goals.push({
+      ...input,
+      id: uid("goal"),
+      created_at: new Date().toISOString(),
+    });
+  }
+  saveDemoDB(db);
+}
+
+export function listResolutions() {
+  return loadDemoDB().resolutions;
+}
+
+export function resolveAlert(
+  input: Omit<AlertResolution, "id" | "created_at">,
+) {
+  const db = loadDemoDB();
+  if (db.resolutions.some((r) => r.alert_key === input.alert_key)) return;
+  db.resolutions.unshift({
+    ...input,
+    id: uid("res"),
+    created_at: new Date().toISOString(),
+  });
   saveDemoDB(db);
 }

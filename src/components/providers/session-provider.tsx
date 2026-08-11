@@ -16,6 +16,11 @@ import {
 } from "@/lib/demo/store";
 import { updateProfile as updateProfileData } from "@/lib/data";
 import { useDemoTick } from "@/lib/demo/use-demo-db";
+import {
+  canSeeMembersBoard,
+  canSeeRegionDashboard,
+  isExecutor,
+} from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -23,13 +28,19 @@ interface SessionContextValue {
   profile: Profile | null;
   loading: boolean;
   isDemo: boolean;
+  /** @deprecated V2 用 canSeeRegion；保留兼容旧页面 */
   isT0: boolean;
+  isT3: boolean;
+  canSeeRegion: boolean;
+  canSeeMembers: boolean;
+  isExecutorOnly: boolean;
   refresh: () => Promise<void>;
   loginDemo: (profileId: string) => void;
   logout: () => Promise<void>;
   completeOnboarding: (data: {
     full_name: string;
     role: Profile["role"];
+    area?: string | null;
   }) => Promise<void>;
 }
 
@@ -99,6 +110,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const completeOnboarding = async (data: {
     full_name: string;
     role: Profile["role"];
+    area?: string | null;
   }) => {
     if (demo && profile) {
       await updateProfileData(profile.id, data);
@@ -119,13 +131,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setProfile(updated as Profile);
   };
 
+  const role = profile?.role;
+
   return (
     <SessionContext.Provider
       value={{
         profile,
         loading,
         isDemo: demo,
-        isT0: profile?.role === "T0",
+        isT0: role === "T3",
+        isT3: role === "T3",
+        canSeeRegion: canSeeRegionDashboard(role),
+        canSeeMembers: canSeeMembersBoard(role),
+        isExecutorOnly: isExecutor(role),
         refresh,
         loginDemo,
         logout,

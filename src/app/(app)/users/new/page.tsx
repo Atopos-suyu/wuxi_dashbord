@@ -22,9 +22,11 @@ import { Textarea } from "@/components/ui/textarea";
 
 export default function NewUserPage() {
   const router = useRouter();
-  const { profile, isT0 } = useSession();
+  const { profile, canSeeMembers } = useSession();
   const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
-  const members = profiles.filter((p) => p.role !== "T0");
+  const members = profiles.filter(
+    (p) => p.role === "T0" || p.role === "伪T0" || p.role === "T1",
+  );
 
   const [form, setForm] = useState<{
     name: string;
@@ -71,7 +73,9 @@ export default function NewUserPage() {
           try {
             const user = await upsertUser({
               ...form,
-              owner_id: isT0 ? form.owner_id || profile.id : profile.id,
+              owner_id: canSeeMembers
+                ? form.owner_id || profile.id
+                : profile.id,
               next_action_due: form.next_action_due || null,
               six_dim_score: DEFAULT_SIX_DIM_SCORE,
               deal_amount: null,
@@ -154,7 +158,7 @@ export default function NewUserPage() {
             </Select>
           </Field>
         </div>
-        {isT0 ? (
+        {canSeeMembers ? (
           <Field label="负责人">
             <Select
               value={form.owner_id || profile?.id}

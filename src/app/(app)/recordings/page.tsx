@@ -12,7 +12,7 @@ import { StageBadge } from "@/components/users/stage-badge";
 import { formatDateTime } from "@/lib/utils";
 
 export default function RecordingsPage() {
-  const { profile, isT0 } = useSession();
+  const { profile, canSeeMembers } = useSession();
   const [memberId, setMemberId] = useState("all");
   const [stage, setStage] = useState("all");
   const [userId, setUserId] = useState("all");
@@ -23,7 +23,7 @@ export default function RecordingsPage() {
     [profile?.id, profile?.role],
   );
 
-  const members = profiles.filter((p) => p.role !== "T0");
+  const members = profiles.filter((p) => p.role !== "T3");
 
   const users = useMemo(() => {
     const map = new Map<string, string>();
@@ -47,12 +47,12 @@ export default function RecordingsPage() {
       <div>
         <h1 className="section-title text-2xl md:text-3xl">录音库</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          {isT0 ? "全部录音" : "我上传的录音"} · 支持在线播放
+          {canSeeMembers ? "可见范围内录音" : "我上传的录音"} · 支持在线播放
         </p>
       </div>
 
       <div className="panel grid grid-cols-1 gap-2 p-3 md:grid-cols-3">
-        {isT0 ? (
+        {canSeeMembers ? (
           <Select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
             <option value="all">全部成员</option>
             {members.map((m) => (

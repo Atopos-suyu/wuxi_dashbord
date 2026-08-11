@@ -4,19 +4,26 @@ import { isDemoMode } from "@/lib/mode";
 import {
   addStageLog as demoAddStageLog,
   getUser as demoGetUser,
+  listGoals as demoListGoals,
   listRecordings as demoListRecordings,
+  listResolutions as demoListResolutions,
   listStageLogs as demoListStageLogs,
   listUsersFor as demoListUsersFor,
   loadDemoDB,
+  resolveAlert as demoResolveAlert,
   updateProfile as demoUpdateProfile,
   upsertCapability as demoUpsertCapability,
   upsertDaily as demoUpsertDaily,
+  upsertGoal as demoUpsertGoal,
   upsertUser as demoUpsertUser,
   upsertWeekly as demoUpsertWeekly,
 } from "@/lib/demo/store";
+import { canSeeRegionDashboard } from "@/lib/permissions";
 import type {
+  AlertResolution,
   CampusUser,
   DailyReview,
+  Goal,
   Profile,
   TeamCapability,
   UserStageLog,
@@ -146,17 +153,56 @@ export async function upsertWeekly(
   await sb.sbUpsertWeekly(input);
 }
 
+export async function listGoals(period?: string): Promise<Goal[]> {
+  if (isDemoMode()) return demoListGoals(period);
+  return sb.sbListGoals(period);
+}
+
+export async function upsertGoal(
+  input: Omit<Goal, "id" | "created_at"> & { id?: string },
+): Promise<void> {
+  if (isDemoMode()) {
+    demoUpsertGoal(input);
+    return;
+  }
+  await sb.sbUpsertGoal(input);
+}
+
+export async function listResolutions(): Promise<AlertResolution[]> {
+  if (isDemoMode()) return demoListResolutions();
+  return sb.sbListResolutions();
+}
+
+export async function resolveAlert(
+  input: Omit<AlertResolution, "id" | "created_at">,
+): Promise<void> {
+  if (isDemoMode()) {
+    demoResolveAlert(input);
+    return;
+  }
+  await sb.sbResolveAlert(input);
+}
+
 /** 聚合快照：看板/成员页用 */
 export async function loadWorkbenchSnapshot(profile: Profile) {
-  const [profiles, users, capabilities, dailyReviews, weeklyReviews] =
+  const leader = canSeeRegionDashboard(profile.role) || profile.role === "T1";
+  const [profiles, users, capabilities, dailyReviews, weeklyReviews, goals, resolutions] =
     await Promise.all([
       listProfiles(),
       listUsersFor(profile),
       listCapabilities(),
-      listDailyReviews(
-        profile.role === "T0" ? undefined : { memberId: profile.id },
-      ),
-      listWeeklyReviews(profile.role === "T0" ? undefined : profile.id),
+      listDailyReviews(leader ? undefined : { memberId: profile.id }),
+      listWeeklyReviews(leader ? undefined : profile.id),
+      listGoals(),
+      listResolutions(),
     ]);
-  return { profiles, users, capabilities, dailyReviews, weeklyReviews };
+  return {
+    profiles,
+    users,
+    capabilities,
+    dailyReviews,
+    weeklyReviews,
+    goals,
+    resolutions,
+  };
 }

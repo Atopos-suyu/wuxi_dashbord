@@ -4,33 +4,41 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AudioLines,
+  Bell,
   ClipboardList,
   LayoutDashboard,
   LogOut,
+  Target,
   Users,
   UserRound,
   CalendarDays,
 } from "lucide-react";
-import { APP_SHORT_NAME } from "@/lib/constants";
+import { APP_SHORT_NAME, ROLE_LABEL } from "@/lib/constants";
 import { useSession } from "@/components/providers/session-provider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
-  { href: "/dashboard", label: "看板", icon: LayoutDashboard, t0Only: true },
-  { href: "/users", label: "用户", icon: Users, t0Only: false },
-  { href: "/members", label: "成员", icon: UserRound, t0Only: true },
-  { href: "/reviews/daily", label: "日报", icon: ClipboardList, t0Only: false },
-  { href: "/reviews/weekly", label: "周报", icon: CalendarDays, t0Only: false },
-  { href: "/recordings", label: "录音", icon: AudioLines, t0Only: false },
+  { href: "/overview", label: "总览", icon: LayoutDashboard, need: "region" as const },
+  { href: "/alerts", label: "预警", icon: Bell, need: "region" as const },
+  { href: "/goals", label: "目标", icon: Target, need: "region" as const },
+  { href: "/users", label: "用户", icon: Users, need: "all" as const },
+  { href: "/members", label: "成员", icon: UserRound, need: "members" as const },
+  { href: "/reviews/daily", label: "日报", icon: ClipboardList, need: "all" as const },
+  { href: "/reviews/weekly", label: "周报", icon: CalendarDays, need: "all" as const },
+  { href: "/recordings", label: "录音", icon: AudioLines, need: "all" as const },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { profile, isT0, logout, isDemo } = useSession();
+  const { profile, canSeeRegion, canSeeMembers, logout, isDemo } = useSession();
 
-  const items = NAV.filter((n) => !n.t0Only || isT0);
+  const items = NAV.filter((n) => {
+    if (n.need === "region") return canSeeRegion;
+    if (n.need === "members") return canSeeMembers;
+    return true;
+  });
 
   return (
     <div className="relative min-h-dvh">
@@ -51,7 +59,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {APP_SHORT_NAME}
               </p>
               <p className="mt-1 text-[11px] text-[var(--muted)]">
-                {profile?.full_name || "未登录"} · {profile?.role || "—"}
+                {profile?.full_name || "未登录"} ·{" "}
+                {profile ? ROLE_LABEL[profile.role] : "—"}
+                {profile?.area ? ` · ${profile.area}` : ""}
                 {isDemo ? " · 演示" : ""}
               </p>
             </div>
@@ -70,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-6xl gap-6 px-4 pb-24 pt-4 md:pb-8 md:pt-6">
+      <div className="mx-auto flex max-w-6xl gap-6 px-4 pb-28 pt-4 md:pb-8 md:pt-6">
         <aside className="hidden w-48 shrink-0 md:block">
           <nav className="sticky top-20 space-y-1">
             {items.map((item) => {
@@ -119,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </div>
         {items.length > 4 ? (
-          <div className="flex justify-center gap-4 border-t border-[var(--line)]/50 px-4 py-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
+          <div className="flex flex-wrap justify-center gap-3 border-t border-[var(--line)]/50 px-4 py-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
             {items.slice(4).map((item) => {
               const active = pathname.startsWith(item.href);
               return (

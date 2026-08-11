@@ -18,13 +18,14 @@ import { formatDate } from "@/lib/utils";
 import type { CampusUser } from "@/lib/types";
 
 export default function UsersPage() {
-  const { profile, isT0 } = useSession();
+  const { profile, canSeeMembers, isExecutorOnly } = useSession();
   const { data: users = [], loading } = useLiveQuery(
     async () => (profile ? listUsersFor(profile) : []),
     [profile?.id, profile?.role],
   );
   const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
-  const members = profiles.filter((p) => p.role !== "T0");
+  const members = profiles.filter((p) => p.role === "T0" || p.role === "伪T0" || p.role === "T1");
+  const showOwnerFilter = canSeeMembers;
 
   const [q, setQ] = useState("");
   const [stage, setStage] = useState("all");
@@ -57,7 +58,7 @@ export default function UsersPage() {
         <div>
           <h1 className="section-title text-2xl md:text-3xl">用户列表</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            {isT0 ? "全部用户" : "我负责的用户"} · {filtered.length} 人
+            {isExecutorOnly ? "我负责的用户" : "可见范围内用户"} · {filtered.length} 人
           </p>
         </div>
         <Button asChild size="sm">
@@ -103,7 +104,7 @@ export default function UsersPage() {
               </option>
             ))}
           </Select>
-          {isT0 ? (
+          {showOwnerFilter ? (
             <Select value={owner} onChange={(e) => setOwner(e.target.value)}>
               <option value="all">全部负责人</option>
               {members.map((m) => (
@@ -134,7 +135,7 @@ export default function UsersPage() {
         <>
           <div className="stagger space-y-3 md:hidden">
             {filtered.map((u) => (
-              <UserCard key={u.id} user={u} showOwner={isT0} />
+              <UserCard key={u.id} user={u} showOwner={showOwnerFilter} />
             ))}
           </div>
           <div className="panel hidden overflow-hidden md:block">

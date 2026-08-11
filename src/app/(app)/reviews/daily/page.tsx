@@ -20,7 +20,7 @@ import { LoadingBlock } from "@/components/ui/loading";
 import { recentDays } from "@/lib/utils";
 
 export default function DailyReviewPage() {
-  const { profile, isT0 } = useSession();
+  const { profile, canSeeMembers } = useSession();
   const today = format(new Date(), "yyyy-MM-dd");
 
   const { data: profiles = [] } = useLiveQuery(() => listProfiles(), []);
@@ -64,11 +64,11 @@ export default function DailyReviewPage() {
   const [filterMember, setFilterMember] = useState("all");
   const [filterDate, setFilterDate] = useState(today);
 
-  const members = profiles.filter((p) => p.role !== "T0");
+  const members = profiles.filter((p) => p.role !== "T3");
   const weekDays = recentDays(7);
 
   const missing = useMemo(() => {
-    if (!isT0) return [];
+    if (!canSeeMembers) return [];
     return members.filter((m) =>
       weekDays
         .slice(-3)
@@ -79,11 +79,11 @@ export default function DailyReviewPage() {
             ),
         ),
     );
-  }, [isT0, members, weekDays, reviews]);
+  }, [canSeeMembers, members, weekDays, reviews]);
 
   const list = reviews
     .filter((d) => {
-      if (!isT0) return d.member_id === profile?.id;
+      if (!canSeeMembers) return d.member_id === profile?.id;
       if (filterMember !== "all" && d.member_id !== filterMember) return false;
       if (filterDate && d.review_date !== filterDate) return false;
       return true;
@@ -174,7 +174,7 @@ export default function DailyReviewPage() {
         </Button>
       </form>
 
-      {isT0 ? (
+      {canSeeMembers ? (
         <>
           {missing.length ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

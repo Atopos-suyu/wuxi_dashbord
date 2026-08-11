@@ -2,8 +2,20 @@ export const APP_NAME = "无锡片区业务工作台";
 export const APP_SHORT_NAME = "WXU 工作台";
 export const DEFAULT_SCHOOL_REGION = "无锡学院";
 
-export const ROLES = ["T0", "T1", "T2", "伪T0"] as const;
+/** V2 角色：T3 片区总负责 > T2 专业片区 > T1 组长 > T0 执行 */
+export const ROLES = ["T3", "T2", "T1", "T0", "伪T0"] as const;
 export type Role = (typeof ROLES)[number];
+
+export const ROLE_LABEL: Record<Role, string> = {
+  T3: "片区总负责",
+  T2: "专业片区负责人",
+  T1: "组长",
+  T0: "执行成员",
+  伪T0: "预备成员",
+};
+
+export const AREAS = ["计科", "软工", "物联网", "大数据", "AI"] as const;
+export type Area = (typeof AREAS)[number];
 
 export const MEMBER_STATUSES = ["active", "pending", "inactive"] as const;
 export type MemberStatus = (typeof MEMBER_STATUSES)[number];
@@ -135,4 +147,37 @@ export const STAGE_COLORS: Record<Stage, string> = {
   关单: "#D97706",
   成交: "#059669",
   流失: "#9CA3AF",
+};
+
+export const GOAL_METRICS = ["招新群", "面试", "A类", "成交"] as const;
+export type GoalMetric = (typeof GOAL_METRICS)[number];
+
+export const ALERT_TYPES = [
+  "日报漏填",
+  "用户停滞",
+  "关单超时",
+  "家长态度恶化",
+  "待办逾期",
+  "能力下滑",
+] as const;
+export type AlertType = (typeof ALERT_TYPES)[number];
+
+/** 预警阈值（可调参） */
+export const ALERT_THRESHOLDS = {
+  dailyMissYellowDays: 1,
+  dailyMissRedDays: 3,
+  stallSADays: 5,
+  stallBDays: 7,
+  closeTimeoutDays: 7,
+  overdueYellowDays: 1,
+  overdueRedDays: 3,
+  capabilityDropWeeks: 2,
+} as const;
+
+export type TrafficLight = "green" | "yellow" | "red";
+
+export const TRAFFIC_LABEL: Record<TrafficLight, string> = {
+  green: "正常",
+  yellow: "待观察",
+  red: "需干预",
 };
