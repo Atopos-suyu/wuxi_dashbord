@@ -13,6 +13,7 @@ import {
 } from "@/lib/demo/seed-data";
 import { calcLevel, normalizeSixDim } from "@/lib/level";
 import { visibleMemberIds } from "@/lib/permissions";
+import { assertRecordingForStage, stageRequiresRecording } from "@/lib/recording-qa";
 import type {
   AlertResolution,
   AppNotification,
@@ -28,7 +29,7 @@ import type {
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
-const STORAGE_KEY = "wxu_demo_db_v2_3";
+const STORAGE_KEY = "wxu_demo_db_v2_4";
 
 export interface DemoDB {
   profiles: Profile[];
@@ -262,11 +263,18 @@ export function copyGoalsFromPeriod(fromPeriod: string, toPeriod: string) {
 export function addStageLog(
   input: Omit<UserStageLog, "id" | "created_at"> & { advanceUser?: boolean },
 ) {
+  assertRecordingForStage(input.stage, input.record_url);
   const db = loadDemoDB();
+  const needsQa =
+    stageRequiresRecording(input.stage) && Boolean(input.record_url);
   const log: UserStageLog = {
     ...input,
     id: uid("log"),
     created_at: new Date().toISOString(),
+    qa_status: needsQa ? "pending" : (input.qa_status ?? null),
+    qa_note: input.qa_note ?? "",
+    qa_by: input.qa_by ?? null,
+    qa_at: input.qa_at ?? null,
   };
   db.stageLogs.unshift(log);
   if (input.advanceUser) {
@@ -283,6 +291,38 @@ export function addStageLog(
   }
   saveDemoDB(db);
   return log;
+}
+
+export function listQaQueue(profile: Profile) {
+  return listStageLogs(undefined, profile).filter(
+    (l) => l.record_url && (l.qa_status === "pending" || !l.qa_status) &&
+      stageRequiresRecording(l.stage),
+  );
+}
+
+export function reviewStageLog(
+  id: string,
+  input: {
+    qa_status: "passed" | "rejected";
+    qa_note?: string;
+    qa_by: string;
+  },
+) {
+  const db = loadDemoDB();
+  const now = new Date().toISOString();
+  db.stageLogs = db.stageLogs.map((l) =>
+    l.id === id
+      ? {
+          ...l,
+          qa_status: input.qa_status,
+          qa_note: input.qa_note ?? "",
+          qa_by: input.qa_by,
+          qa_at: now,
+        }
+      : l,
+  );
+  saveDemoDB(db);
+  return listStageLogs().find((l) => l.id === id) ?? null;
 }
 
 export function listStageLogs(userId?: string, profile?: Profile) {

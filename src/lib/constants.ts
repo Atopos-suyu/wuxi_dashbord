@@ -153,6 +153,18 @@ export const STAGE_COLORS: Record<Stage, string> = {
   流失: "#9CA3AF",
 };
 
+/** 推进到这些阶段时必须上传录音（质检） */
+export const STAGES_REQUIRE_RECORDING: Stage[] = ["职规", "关单"];
+
+export const QA_STATUSES = ["pending", "passed", "rejected"] as const;
+export type QaStatus = (typeof QA_STATUSES)[number];
+
+export const QA_STATUS_LABEL: Record<QaStatus, string> = {
+  pending: "待抽听",
+  passed: "合格",
+  rejected: "需复盘",
+};
+
 export const GOAL_METRICS = ["招新群", "面试", "A类", "成交"] as const;
 export type GoalMetric = (typeof GOAL_METRICS)[number];
 

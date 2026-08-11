@@ -48,6 +48,14 @@ export default function RecordingsPage() {
         <h1 className="section-title text-2xl md:text-3xl">录音库</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           {canSeeMembers ? "可见范围内录音" : "我上传的录音"} · 支持在线播放
+          {canSeeMembers ? (
+            <>
+              {" · "}
+              <a href="/qa" className="text-[var(--lake)] underline">
+                去质检
+              </a>
+            </>
+          ) : null}
         </p>
       </div>
 

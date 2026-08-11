@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { normalizeSixDim } from "@/lib/level";
+import { assertRecordingForStage, stageRequiresRecording } from "@/lib/recording-qa";
 import type {
   CampusUser,
   DailyReview,
@@ -175,6 +176,10 @@ export async function sbListStageLogs(
       record_url: (r.record_url as string | null) ?? null,
       owner_id: String(r.owner_id),
       created_at: String(r.created_at),
+      qa_status: (r.qa_status as UserStageLog["qa_status"]) ?? null,
+      qa_note: (r.qa_note as string | null) ?? "",
+      qa_by: (r.qa_by as string | null) ?? null,
+      qa_at: (r.qa_at as string | null) ?? null,
       owner: (r.owner as Profile | null) ?? null,
       user: user
         ? { id: user.id, name: user.name, contact: user.contact ?? "" }
@@ -186,10 +191,16 @@ export async function sbListStageLogs(
 export async function sbAddStageLog(
   input: Omit<UserStageLog, "id" | "created_at"> & { advanceUser?: boolean },
 ): Promise<UserStageLog> {
+  assertRecordingForStage(input.stage, input.record_url);
   const { advanceUser, ...rest } = input;
+  const needsQa =
+    stageRequiresRecording(rest.stage) && Boolean(rest.record_url);
   const { data, error } = await sb()
     .from("user_stage_logs")
-    .insert(rest)
+    .insert({
+      ...rest,
+      qa_status: needsQa ? "pending" : rest.qa_status ?? null,
+    })
     .select("*")
     .single();
   if (error) throw error;
@@ -200,6 +211,65 @@ export async function sbAddStageLog(
       .eq("id", rest.user_id);
   }
   return data as UserStageLog;
+}
+
+export async function sbListQaQueue(_profile: Profile) {
+  const logs = await sbListStageLogs();
+  return logs.filter(
+    (l) =>
+      l.record_url &&
+      stageRequiresRecording(l.stage) &&
+      (l.qa_status === "pending" || !l.qa_status),
+  );
+}
+
+export async function sbReviewStageLog(
+  id: string,
+  input: {
+    qa_status: "passed" | "rejected";
+    qa_note?: string;
+    qa_by: string;
+  },
+) {
+  const { data, error } = await sb()
+    .from("user_stage_logs")
+    .update({
+      qa_status: input.qa_status,
+      qa_note: input.qa_note ?? "",
+      qa_by: input.qa_by,
+      qa_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select("*, owner:profiles!owner_id(*), user:users(id, name, contact)")
+    .single();
+  if (error) throw error;
+  return data as UserStageLog;
+}
+
+export async function sbListOutboundPushes() {
+  const { data, error } = await sb()
+    .from("outbound_pushes")
+    .select("source_key")
+    .eq("channel", "wecom");
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => String(r.source_key)));
+}
+
+export async function sbRecordOutboundPush(input: {
+  source_key: string;
+  payload: string;
+  pushed_by: string | null;
+}) {
+  const { error } = await sb().from("outbound_pushes").upsert(
+    {
+      channel: "wecom",
+      source_key: input.source_key,
+      payload: input.payload,
+      pushed_by: input.pushed_by,
+    },
+    { onConflict: "channel,source_key" },
+  );
+  if (error) throw error;
 }
 
 export async function sbListRecordings(profile: Profile): Promise<UserStageLog[]> {

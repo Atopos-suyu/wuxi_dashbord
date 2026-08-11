@@ -8,12 +8,14 @@ import {
   SIX_DIM_KEYS,
   STAGE_LOG_STATUSES,
   STAGES,
+  STAGES_REQUIRE_RECORDING,
   type SixDimScore,
   type Stage,
   type StageLogStatus,
 } from "@/lib/constants";
 import { calcLevel, normalizeSixDim } from "@/lib/level";
 import { canSeeMember } from "@/lib/permissions";
+import { stageRequiresRecording } from "@/lib/recording-qa";
 import { useSession } from "@/components/providers/session-provider";
 import {
   addStageLog,
@@ -214,7 +216,14 @@ export default function UserDetailPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label>上传录音（手机可录）</Label>
+          <Label>
+            上传录音（手机可录）
+            {stageRequiresRecording(nextStage) ? (
+              <span className="ml-1 text-[var(--accent)]">
+                · 「{nextStage}」必传
+              </span>
+            ) : null}
+          </Label>
           <Input
             type="file"
             accept="audio/*,.m4a,.mp3,.wav"
@@ -242,11 +251,18 @@ export default function UserDetailPage() {
             <audio controls className="mt-2 w-full" src={previewUrl} />
           ) : recordUrl ? (
             <p className="text-xs text-[var(--muted)]">已上传：{recordUrl}</p>
+          ) : stageRequiresRecording(nextStage) ? (
+            <p className="text-xs text-[var(--accent)]">
+              必传阶段：{STAGES_REQUIRE_RECORDING.join(" / ")}
+            </p>
           ) : null}
         </div>
         <Button
           className="w-full"
-          disabled={uploading}
+          disabled={
+            uploading ||
+            (stageRequiresRecording(nextStage) && !recordUrl)
+          }
           onClick={async () => {
             try {
               await addStageLog({
