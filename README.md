@@ -37,18 +37,24 @@ supabase/migrations/20260811000003_v2_roles_goals_alerts.sql
 
 3. 填写 `.env.local` 中的 `NEXT_PUBLIC_SUPABASE_URL` 与 `NEXT_PUBLIC_SUPABASE_ANON_KEY`，并设置 `NEXT_PUBLIC_DEMO_MODE=false`。
 
-## 功能清单（V2）
+## 功能清单（V2 / V2.1）
 
 | 模块 | 说明 |
 |---|---|
-| 片区总览 | T3/T2：漏斗、等级、成员红绿灯 |
-| 预警中心 | 日报漏填 / 用户停滞 / 关单超时等，支持处理闭环 |
-| 目标与达成 | 周目标（招新群/面试/A类/成交）vs 实际 |
-| 成员下钻 | 点人名看用户、能力对比、近 7 天日报 |
-| 用户管理 | 列表筛选、六维雷达、阶段推进、录音 |
+| 片区总览 | T3/T2：漏斗、等级、成员红绿灯、CSV 导出 |
+| 预警中心 | 动态计算 + 处理闭环；导航角标；含目标落后 / 家长态度恶化（日志对比） |
+| 目标与达成 | 周目标 vs 实际；从上周复制；CSV |
+| 组织管理 | T3：调整角色 / 片区 / 上级 / 状态（`/org`） |
+| 成员下钻 | 用户列表、能力对比、近 7 天日报、告警 |
+| 用户管理 | 六维、阶段、待办完成、联系方式复制、态度变更日志 |
 | 复盘 / 录音库 | 日报周报与录音在线播放 |
 
-权限核心：`can_see_member`（SQL RLS + `src/lib/permissions.ts`）。预警阈值在 `src/lib/constants.ts` 的 `ALERT_THRESHOLDS`。
+权限核心：`can_see_member`（SQL RLS + `src/lib/permissions.ts`）。预警阈值在 `ALERT_THRESHOLDS`。
+
+增量迁移：
+- V2：`20260811000003_v2_roles_goals_alerts.sql`
+- V2.1：`20260811000004_v2_1_ops.sql`（`parent_attitude_logs`）
+- 或一键执行 `supabase/setup_all.sql`
 
 ## 脚本
 

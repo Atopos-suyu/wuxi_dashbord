@@ -23,7 +23,8 @@ import { LevelDonut } from "@/components/charts/level-donut";
 import { Select } from "@/components/ui/select";
 import { LoadingBlock } from "@/components/ui/loading";
 import { Badge } from "@/components/ui/badge";
-import { isWithinRange } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { downloadCsv, isWithinRange } from "@/lib/utils";
 
 const LIGHT_STYLE: Record<TrafficLight, string> = {
   green: "bg-emerald-100 text-emerald-800",
@@ -70,6 +71,9 @@ export default function OverviewPage() {
       dailyReviews: data.dailyReviews,
       capabilities: data.capabilities,
       resolutions: data.resolutions,
+      attitudeLogs: data.attitudeLogs,
+      goals: data.goals,
+      period: data.period,
     });
   }, [data]);
 
@@ -106,6 +110,34 @@ export default function OverviewPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              downloadCsv("overview-traffic.csv", [
+                ["成员", "角色", "片区", "红绿灯", "原因", "用户数"],
+                ...members.map((m) => {
+                  const { light, reasons } = memberTrafficLight({
+                    member: m,
+                    users,
+                    dailyReviews: data!.dailyReviews,
+                    capabilities: data!.capabilities,
+                    alerts,
+                  });
+                  return [
+                    m.full_name,
+                    ROLE_LABEL[m.role],
+                    m.area ?? "",
+                    TRAFFIC_LABEL[light],
+                    reasons.join("；"),
+                    String(users.filter((u) => u.owner_id === m.id).length),
+                  ];
+                }),
+              ]);
+            }}
+          >
+            导出 CSV
+          </Button>
           <Select
             className="w-28"
             value={area}

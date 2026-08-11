@@ -76,6 +76,7 @@ export async function sbGetUser(id: string): Promise<CampusUser | null> {
 
 export async function sbUpsertUser(
   input: Partial<CampusUser> & Pick<CampusUser, "name" | "owner_id">,
+  opts?: { changedBy?: string | null },
 ): Promise<CampusUser | null> {
   const payload: Record<string, unknown> = {
     name: input.name,
@@ -92,6 +93,7 @@ export async function sbUpsertUser(
     "next_action_due",
     "deal_amount",
     "remark",
+    "area",
   ];
   for (const key of fields) {
     if (input[key] !== undefined) payload[key] = input[key];
@@ -101,6 +103,21 @@ export async function sbUpsertUser(
   }
 
   if (input.id) {
+    if (input.parent_attitude !== undefined) {
+      const { data: prev } = await sb()
+        .from("users")
+        .select("parent_attitude")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (prev && prev.parent_attitude !== input.parent_attitude) {
+        await sb().from("parent_attitude_logs").insert({
+          user_id: input.id,
+          from_attitude: prev.parent_attitude,
+          to_attitude: input.parent_attitude,
+          changed_by: opts?.changedBy ?? null,
+        });
+      }
+    }
     const { data, error } = await sb()
       .from("users")
       .update(payload)
@@ -114,6 +131,17 @@ export async function sbUpsertUser(
   const { data, error } = await sb()
     .from("users")
     .insert(payload)
+    .select("*, owner:profiles!owner_id(*)")
+    .single();
+  if (error) throw error;
+  return mapUser(data as Record<string, unknown>);
+}
+
+export async function sbCompleteUserTodo(userId: string) {
+  const { data, error } = await sb()
+    .from("users")
+    .update({ next_action: "", next_action_due: null })
+    .eq("id", userId)
     .select("*, owner:profiles!owner_id(*)")
     .single();
   if (error) throw error;
@@ -373,4 +401,48 @@ export async function sbResolveAlert(
     { onConflict: "alert_key" },
   );
   if (error) throw error;
+}
+
+export async function sbListAttitudeLogs(userId?: string) {
+  let query = sb()
+    .from("parent_attitude_logs")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as import("@/lib/types").ParentAttitudeLog[];
+}
+
+export async function sbCopyGoalsFromPeriod(
+  fromPeriod: string,
+  toPeriod: string,
+) {
+  const { data: source, error } = await sb()
+    .from("goals")
+    .select("*")
+    .eq("period", fromPeriod);
+  if (error) throw error;
+  let copied = 0;
+  for (const g of source ?? []) {
+    let existsQuery = sb()
+      .from("goals")
+      .select("id")
+      .eq("period", toPeriod)
+      .eq("metric", g.metric);
+    existsQuery =
+      g.member_id == null
+        ? existsQuery.is("member_id", null)
+        : existsQuery.eq("member_id", g.member_id);
+    const { data: existing } = await existsQuery.maybeSingle();
+    if (existing) continue;
+    const { error: insertError } = await sb().from("goals").insert({
+      member_id: g.member_id,
+      period: toPeriod,
+      metric: g.metric,
+      target_value: g.target_value,
+    });
+    if (!insertError) copied += 1;
+  }
+  return copied;
 }

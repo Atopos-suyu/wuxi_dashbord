@@ -8,12 +8,16 @@ import {
   ClipboardList,
   LayoutDashboard,
   LogOut,
+  Network,
   Target,
   Users,
   UserRound,
   CalendarDays,
 } from "lucide-react";
 import { APP_SHORT_NAME, ROLE_LABEL } from "@/lib/constants";
+import { computeAlerts, countOpenAlerts } from "@/lib/alerts";
+import { loadWorkbenchSnapshot } from "@/lib/data";
+import { useLiveQuery } from "@/lib/data/use-live-query";
 import { useSession } from "@/components/providers/session-provider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,6 +26,7 @@ const NAV = [
   { href: "/overview", label: "总览", icon: LayoutDashboard, need: "region" as const },
   { href: "/alerts", label: "预警", icon: Bell, need: "region" as const },
   { href: "/goals", label: "目标", icon: Target, need: "region" as const },
+  { href: "/org", label: "组织", icon: Network, need: "org" as const },
   { href: "/users", label: "用户", icon: Users, need: "all" as const },
   { href: "/members", label: "成员", icon: UserRound, need: "members" as const },
   { href: "/reviews/daily", label: "日报", icon: ClipboardList, need: "all" as const },
@@ -32,11 +37,39 @@ const NAV = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { profile, canSeeRegion, canSeeMembers, logout, isDemo } = useSession();
+  const {
+    profile,
+    canSeeRegion,
+    canSeeMembers,
+    canManageOrg: canOrg,
+    logout,
+    isDemo,
+  } = useSession();
+
+  const { data: snap } = useLiveQuery(
+    async () => (profile && canSeeRegion ? loadWorkbenchSnapshot(profile) : null),
+    [profile?.id, canSeeRegion],
+  );
+
+  const openAlerts = snap
+    ? countOpenAlerts(
+        computeAlerts({
+          members: snap.profiles,
+          users: snap.users,
+          dailyReviews: snap.dailyReviews,
+          capabilities: snap.capabilities,
+          resolutions: snap.resolutions,
+          attitudeLogs: snap.attitudeLogs,
+          goals: snap.goals,
+          period: snap.period,
+        }),
+      )
+    : 0;
 
   const items = NAV.filter((n) => {
     if (n.need === "region") return canSeeRegion;
     if (n.need === "members") return canSeeMembers;
+    if (n.need === "org") return canOrg;
     return true;
   });
 
@@ -86,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {items.map((item) => {
               const active = pathname.startsWith(item.href);
               const Icon = item.icon;
+              const showBadge = item.href === "/alerts" && openAlerts > 0;
               return (
                 <Link
                   key={item.href}
@@ -98,7 +132,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {showBadge ? (
+                    <span
+                      className={cn(
+                        "rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                        active
+                          ? "bg-white/20 text-white"
+                          : "bg-rose-100 text-rose-800",
+                      )}
+                    >
+                      {openAlerts}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -113,17 +159,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {items.slice(0, 4).map((item) => {
             const active = pathname.startsWith(item.href);
             const Icon = item.icon;
+            const showBadge = item.href === "/alerts" && openAlerts > 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px]",
+                  "relative flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px]",
                   active ? "text-[var(--accent)]" : "text-[var(--muted)]",
                 )}
               >
                 <Icon className="h-5 w-5" />
                 {item.label}
+                {showBadge ? (
+                  <span className="absolute right-2 top-1 min-w-4 rounded-full bg-rose-500 px-1 text-center text-[9px] font-bold text-white">
+                    {openAlerts > 9 ? "9+" : openAlerts}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -142,6 +194,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   {item.label}
+                  {item.href === "/alerts" && openAlerts > 0
+                    ? ` (${openAlerts})`
+                    : ""}
                 </Link>
               );
             })}

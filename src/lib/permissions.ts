@@ -15,6 +15,11 @@ export function isExecutor(role?: Role | null) {
   return role === "T0" || role === "伪T0";
 }
 
+/** 组织管理台：仅 T3 */
+export function canManageOrg(role?: Role | null) {
+  return role === "T3";
+}
+
 export function canSeeMember(
   viewer: Profile,
   target: Profile,
