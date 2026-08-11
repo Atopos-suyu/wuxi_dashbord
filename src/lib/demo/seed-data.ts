@@ -113,6 +113,7 @@ function makeUser(
     six_dim_score?: Partial<SixDimScore>;
     created_at?: string;
     last_stage_update_at?: string;
+    last_active_at?: string | null;
   },
 ): CampusUser {
   const six = score(partial.six_dim_score ?? {});
@@ -124,6 +125,7 @@ function makeUser(
     created_at: created,
     updated_at: created,
     last_stage_update_at: partial.last_stage_update_at ?? created,
+    last_active_at: partial.last_active_at ?? null,
   };
 }
 
@@ -250,6 +252,7 @@ export const DEMO_USERS: CampusUser[] = [
     deal_amount: 6980,
     remark: "本周成交",
     created_at: "2026-08-04T09:00:00.000Z",
+    last_active_at: format(subDays(new Date(), 2), "yyyy-MM-dd") + "T12:00:00.000Z",
   }),
   makeUser({
     id: "u6",
@@ -259,23 +262,45 @@ export const DEMO_USERS: CampusUser[] = [
     channel: "小红书",
     owner_id: "demo-t0-cs2",
     area: "计科",
-    stage: "关单",
+    stage: "成交",
     six_dim_score: {
       提前学习意识: 2,
       额外学习意识: 2,
       "学习AI/编程意识": 3,
       付费学习意识: 2,
-      付费能力: 1,
-      信任度: 3,
+      付费能力: 3,
+      信任度: 2,
     },
-    family_situation: "经济一般",
-    parent_attitude: "反对",
-    next_action: "再沟通家长",
-    next_action_due: format(subDays(new Date(), 4), "yyyy-MM-dd"),
-    deal_amount: null,
-    remark: "",
-    last_stage_update_at: format(subDays(new Date(), 9), "yyyy-MM-dd") + "T10:00:00.000Z",
+    family_situation: "上月成交",
+    parent_attitude: "支持",
+    next_action: "召回进群",
+    next_action_due: null,
+    deal_amount: 4980,
+    remark: "需召回",
+    created_at: "2026-07-20T09:00:00.000Z",
+    last_active_at: format(subDays(new Date(), 20), "yyyy-MM-dd") + "T12:00:00.000Z",
   }),
+];
+
+export const DEMO_ACTIVITIES: import("@/lib/types").StudentActivity[] = [
+  {
+    id: "sa1",
+    user_id: "u5",
+    activity_type: "课时出勤",
+    note: "第一节直播课",
+    happened_at: format(subDays(new Date(), 2), "yyyy-MM-dd") + "T12:00:00.000Z",
+    recorded_by: "demo-t0-cs2",
+    created_at: format(subDays(new Date(), 2), "yyyy-MM-dd") + "T12:00:00.000Z",
+  },
+  {
+    id: "sa2",
+    user_id: "u6",
+    activity_type: "社群互动",
+    note: "上次在群里发言",
+    happened_at: format(subDays(new Date(), 20), "yyyy-MM-dd") + "T12:00:00.000Z",
+    recorded_by: "demo-t0-cs2",
+    created_at: format(subDays(new Date(), 20), "yyyy-MM-dd") + "T12:00:00.000Z",
+  },
 ];
 
 export const DEMO_STAGE_LOGS: UserStageLog[] = [

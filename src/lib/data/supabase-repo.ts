@@ -39,6 +39,7 @@ function mapUser(row: Record<string, unknown>): CampusUser {
     remark: String(row.remark ?? ""),
     area: (row.area as string | null) ?? null,
     last_stage_update_at: (row.last_stage_update_at as string | null) ?? null,
+    last_active_at: (row.last_active_at as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     owner: owner ?? null,
@@ -445,4 +446,79 @@ export async function sbCopyGoalsFromPeriod(
     if (!insertError) copied += 1;
   }
   return copied;
+}
+
+export async function sbListNotifications(recipientId: string) {
+  const { data, error } = await sb()
+    .from("notifications")
+    .select("*")
+    .eq("recipient_id", recipientId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as import("@/lib/types").AppNotification[];
+}
+
+export async function sbUpsertNotifications(
+  rows: Omit<import("@/lib/types").AppNotification, "id" | "created_at">[],
+) {
+  if (!rows.length) return;
+  const { error } = await sb().from("notifications").upsert(
+    rows.map((r) => ({
+      recipient_id: r.recipient_id,
+      title: r.title,
+      body: r.body,
+      link: r.link,
+      level: r.level,
+      source_key: r.source_key,
+      read_at: r.read_at,
+    })),
+    { onConflict: "recipient_id,source_key" },
+  );
+  if (error) throw error;
+}
+
+export async function sbMarkNotificationRead(id: string) {
+  const { error } = await sb()
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function sbMarkAllNotificationsRead(recipientId: string) {
+  const { error } = await sb()
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("recipient_id", recipientId)
+    .is("read_at", null);
+  if (error) throw error;
+}
+
+export async function sbListActivities(userId?: string) {
+  let query = sb()
+    .from("student_activities")
+    .select("*")
+    .order("happened_at", { ascending: false });
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as import("@/lib/types").StudentActivity[];
+}
+
+export async function sbAddStudentActivity(
+  input: Omit<import("@/lib/types").StudentActivity, "id" | "created_at">,
+) {
+  const { data, error } = await sb()
+    .from("student_activities")
+    .insert({
+      user_id: input.user_id,
+      activity_type: input.activity_type,
+      note: input.note,
+      happened_at: input.happened_at,
+      recorded_by: input.recorded_by,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as import("@/lib/types").StudentActivity;
 }

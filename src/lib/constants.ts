@@ -175,7 +175,20 @@ export const ALERT_THRESHOLDS = {
   capabilityDropWeeks: 2,
   /** 周目标达成率低于该比例触发「目标落后」 */
   goalLagPct: 50,
+  /** 成交学员：超过该天数无活跃记为「需召回」 */
+  studentInactiveDays: 14,
+  /** 9 月活跃目标：至少保持活跃的成交学员数 */
+  studentActiveTarget: 5,
 } as const;
+
+export const ACTIVITY_TYPES = [
+  "社群互动",
+  "课时出勤",
+  "作业提交",
+  "1v1跟进",
+  "其他",
+] as const;
+export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
 export type TrafficLight = "green" | "yellow" | "red";
 
